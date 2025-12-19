@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Calendar } from "./calendar";
 import { Loader2 } from "lucide-react";
+import HorizontalScroll from "./horizontal-scroll"; // <--- AJUSTE O CAMINHO SE NECESSÁRIO
 import { projectId, publicAnonKey } from "../../../../utils/supabase/info";
 
 interface DateTimeSelectionProps {
@@ -83,7 +84,7 @@ export function DateTimeSelection({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="mb-4">Select Date</h3>
+        <h3 className="mb-4">Selecione uma Data</h3>
         <div className="flex justify-center">
           <Calendar
             mode="single"
@@ -99,7 +100,7 @@ export function DateTimeSelection({
 
       {selectedDate && (
         <div>
-          <h3 className="mb-4">Select Time</h3>
+          <h3 className="mb-4">Selecione um horário</h3>
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
@@ -113,7 +114,8 @@ export function DateTimeSelection({
               <p className="text-destructive">{error}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+            /* --- INTEGRAÇÃO DO HORIZONTAL SCROLL --- */
+            <HorizontalScroll>
               {timeSlots.map((time) => {
                 const isBooked = isTimeBooked(time);
                 return (
@@ -121,20 +123,23 @@ export function DateTimeSelection({
                     key={time}
                     onClick={() => !isBooked && onSelectTime(time)}
                     disabled={isBooked}
-                    className={`py-3 px-4 rounded-xl border-2 transition-all duration-300 ${
-                      isBooked
-                        ? "border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-                        : selectedTime === time
-                        ? "border-primary bg-primary text-white shadow-lg"
-                        : "border-border bg-card hover:border-primary/40 hover:shadow-md"
-                    }`}
+                    /* Mantivemos min-w-fit e whitespace-nowrap para garantir que o botão não encolha dentro do scroll */
+                    className={`
+                      min-w-fit whitespace-nowrap py-2 px-6 rounded-xl border-2 transition-all duration-300 snap-center
+                      ${
+                        isBooked
+                          ? "border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                          : selectedTime === time
+                          ? "border-primary bg-primary text-white shadow-lg scale-105"
+                          : "border-border bg-card hover:border-primary/40 hover:shadow-md"
+                      }`}
                   >
                     {time}
                     {isBooked && <div className="text-xs mt-1">Booked</div>}
                   </button>
                 );
               })}
-            </div>
+            </HorizontalScroll>
           )}
         </div>
       )}
