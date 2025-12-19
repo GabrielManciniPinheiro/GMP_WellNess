@@ -1,27 +1,103 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "react-day-picker/style.css";
+@import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@plugin "tailwindcss-animate";
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
+@custom-variant dark (&:is(.dark *));
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --font-size: 16px;
+  --background: #fffcfa;
+  --foreground: #2d2d2d;
+  --card: #ffffff;
+  --card-foreground: #2d2d2d;
+  --primary: #ff8f73; /* Seu Laranja Salmão */
+  --primary-foreground: #ffffff;
+  --secondary: #ffe5df;
+  --secondary-foreground: #2d2d2d;
+  --muted: #f5f5f5;
+  --muted-foreground: #8a8a8a;
+  --accent: #fff0ed;
+  --accent-foreground: #2d2d2d;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 143, 115, 0.15);
+  --input: transparent;
+  --ring: #ff8f73;
+  --radius: 0.625rem;
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+}
+
+/* --- BLOQUEIO TOTAL DO AZUL (FORÇA BRUTA) --- */
+
+/* 1. Mata o outline do navegador em qualquer elemento do calendário */
+[data-slot="calendar"] *,
+.rdp-day_button,
+.rdp-day_button:focus,
+.rdp-day_button:focus-visible {
+  outline: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 2. Reaplica o SEU ring laranja salmão apenas quando focado */
+.rdp-day_button:focus-visible,
+.rdp-day_button[data-focused="true"] {
+  box-shadow: 0 0 0 2px #fffcfa, 0 0 0 4px #ff8f73 !important;
+  border-radius: 0.625rem !important;
+}
+
+/* 3. Estilos de títulos preservados */
+h1 {
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+h2 {
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+button {
+  font-size: 1rem;
+  font-weight: 500;
 }
