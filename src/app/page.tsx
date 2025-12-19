@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Sparkles, Loader2 } from "lucide-react";
-import { ServiceSelection } from "./components/ui/ServiceSelection";
-import { TherapistSelection } from "./components/ui/TherapistSelection";
-import { DateTimeSelection } from "./components/ui/DateTimeSelection";
-import { ContactForm } from "./components/ui/ContactForm";
-import { BookingSummary } from "./components/ui/BookingSummary";
+import { ServiceSelection } from "./components/booking/ServiceSelection";
+import { TherapistSelection } from "./components/booking/TherapistSelection";
+import { DateTimeSelection } from "./components/booking/DateTimeSelection";
+import { ContactForm } from "./components/booking/ContactForm";
+import { BookingSummary } from "./components/booking/BookingSummary";
 import { Button } from "./components/ui/button";
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
@@ -49,32 +49,11 @@ const services = [
 
 const therapists = [
   {
-    id: "sarah",
-    name: "Sarah Martinez",
-    specialty: "Sueca e Pedras Quentes",
+    id: "Dirlene",
+    name: "Dirlene",
+    specialty: "Massoterapeuta",
     image:
       "https://images.unsplash.com/photo-1620148222862-b95cf7405a7b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGElMjB0aGVyYXBpc3QlMjB3b21hbnxlbnwxfHx8fDE3NjYxNTA2MjJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
-  },
-  {
-    id: "michael",
-    name: "Michael Chen",
-    specialty: "Especialista em Massagem Profunda",
-    image:
-      "https://images.unsplash.com/photo-1758599879693-9e06f55a4ded?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3ZWxsbmVzcyUyMHRoZXJhcGlzdCUyMG1hbnxlbnwxfHx8fDE3NjYxNTA2MjN8MA&ixlib=rb-4.1.0&q=80&w=1080",
-  },
-  {
-    id: "emily",
-    name: "Emily Roberts",
-    specialty: "Especialista em Aromaterapia",
-    image:
-      "https://images.unsplash.com/photo-1700882304335-34d47c682a4c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYXNzYWdlJTIwdGhlcmFwaXN0JTIwcHJvZmVzc2lvbmFsfGVufDF8fHx8MTc2NjA3MTYyMHww&ixlib=rb-4.1.0&q=80&w=1080",
-  },
-  {
-    id: "james",
-    name: "James Wilson",
-    specialty: "Esportiva e Tecido Profundo",
-    image:
-      "https://images.unsplash.com/photo-1745327883508-b6cd32e5dde5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYXNzYWdlJTIwdGhlcmFweSUyMHByb2Zlc3Npb25hbHxlbnwxfHx8fDE3NjYxMzA4NDh8MA&ixlib=rb-4.1.0&q=80&w=1080",
   },
 ];
 
@@ -224,7 +203,7 @@ export default function Page() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
             <Sparkles className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="mb-2">Serenity Wellness</h1>
+          <h1 className="mb-2">GMP Wellness</h1>
           <p className="text-muted-foreground">
             Reserve sua experiência de massagem perfeita
           </p>

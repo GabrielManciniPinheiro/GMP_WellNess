@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Calendar } from "./calendar";
+import { Calendar } from "../ui/calendar";
 import { Loader2 } from "lucide-react";
-import HorizontalScroll from "./horizontal-scroll"; // <--- AJUSTE O CAMINHO SE NECESSÁRIO
+import HorizontalScroll from "../ui/horizontal-scroll"; // <--- AJUSTE O CAMINHO SE NECESSÁRIO
 import { projectId, publicAnonKey } from "../../../../utils/supabase/info";
 
 interface DateTimeSelectionProps {
