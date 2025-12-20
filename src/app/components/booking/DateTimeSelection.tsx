@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Calendar } from "../ui/calendar";
 import { Loader2 } from "lucide-react";
-import HorizontalScroll from "../ui/horizontal-scroll"; // <--- AJUSTE O CAMINHO SE NECESSÁRIO
-import { projectId, publicAnonKey } from "../../../../utils/supabase/info";
+import HorizontalScroll from "../ui/horizontal-scroll";
+import { supabase } from "../../../lib/supabaseClient";
 
 interface DateTimeSelectionProps {
   selectedDate: Date | undefined;
@@ -12,8 +12,9 @@ interface DateTimeSelectionProps {
   onSelectTime: (time: string) => void;
 }
 
-const timeSlots = [
-  "9:00",
+// Horários de semana (Seg-Sex)
+const weekDaySlots = [
+  "09:00",
   "10:00",
   "11:00",
   "12:00",
@@ -25,6 +26,9 @@ const timeSlots = [
   "18:00",
 ];
 
+// Horários de Sábado (até 14h)
+const saturdaySlots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00"];
+
 export function DateTimeSelection({
   selectedDate,
   selectedTime,
@@ -35,10 +39,27 @@ export function DateTimeSelection({
   const [bookedTimes, setBookedTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [availableSlots, setAvailableSlots] = useState<string[]>(weekDaySlots);
+
+  // --- CORREÇÃO DE FUSO: Função manual para formatar YYYY-MM-DD ---
+  const formatDateToLocalISO = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   useEffect(() => {
     if (selectedDate && selectedTherapist) {
+      const dayOfWeek = selectedDate.getDay();
+      if (dayOfWeek === 6) {
+        setAvailableSlots(saturdaySlots);
+      } else {
+        setAvailableSlots(weekDaySlots);
+      }
       fetchAvailability();
+    } else {
+      setBookedTimes([]);
     }
   }, [selectedDate, selectedTherapist]);
 
@@ -49,29 +70,25 @@ export function DateTimeSelection({
     setError(null);
 
     try {
-      const dateString = selectedDate.toISOString().split("T")[0];
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f348aebd/availability/${selectedTherapist}/${dateString}`,
-        {
-          headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
+      // Usa a formatação manual para garantir consistência com o banco
+      const dateString = formatDateToLocalISO(selectedDate);
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch availability");
-      }
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("time")
+        .eq("therapist_id", selectedTherapist)
+        .eq("date", dateString)
+        .neq("status", "cancelled");
 
-      const data = await response.json();
-      if (data.success) {
-        setBookedTimes(data.bookedTimes || []);
-      } else {
-        setError(data.error || "Failed to fetch availability");
+      if (error) throw error;
+
+      if (data) {
+        const busyTimes = data.map((item) => item.time);
+        setBookedTimes(busyTimes);
       }
     } catch (err) {
-      console.error("Error fetching availability:", err);
-      setError("Unable to load availability. Please try again.");
+      console.error("Erro ao buscar disponibilidade:", err);
+      setError("Não foi possível carregar os horários.");
     } finally {
       setLoading(false);
     }
@@ -81,61 +98,73 @@ export function DateTimeSelection({
     return bookedTimes.includes(time);
   };
 
+  const isDateDisabled = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date();
+    maxDate.setDate(today.getDate() + 30);
+
+    return date < today || date > maxDate || date.getDay() === 0;
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="mb-4">Selecione uma Data</h3>
+        <h3 className="mb-4 text-lg font-medium">Selecione uma Data</h3>
         <div className="flex justify-center">
           <Calendar
             mode="single"
             selected={selectedDate}
             onSelect={onSelectDate}
-            disabled={(date) =>
-              date < new Date(new Date().setHours(0, 0, 0, 0))
-            }
-            className="rounded-2xl border-2 border-border bg-card p-4"
+            disabled={isDateDisabled}
+            className="rounded-2xl border-2 border-border bg-card p-4 shadow-sm"
           />
         </div>
       </div>
 
       {selectedDate && (
-        <div>
-          <h3 className="mb-4">Selecione um horário</h3>
+        <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+          <h3 className="mb-4 text-lg font-medium">
+            Horários disponíveis para{" "}
+            {selectedDate.toLocaleDateString("pt-BR", { weekday: "long" })}
+          </h3>
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
               <span className="ml-2 text-muted-foreground">
-                Loading availability...
+                Verificando agenda...
               </span>
             </div>
           ) : error ? (
             <div className="text-center py-8">
-              <p className="text-destructive">{error}</p>
+              <p className="text-destructive text-sm">{error}</p>
             </div>
           ) : (
-            /* --- INTEGRAÇÃO DO HORIZONTAL SCROLL --- */
             <HorizontalScroll>
-              {timeSlots.map((time) => {
+              {availableSlots.map((time) => {
                 const isBooked = isTimeBooked(time);
                 return (
                   <button
                     key={time}
                     onClick={() => !isBooked && onSelectTime(time)}
                     disabled={isBooked}
-                    /* Mantivemos min-w-fit e whitespace-nowrap para garantir que o botão não encolha dentro do scroll */
                     className={`
-                      min-w-fit whitespace-nowrap py-2 px-6 rounded-xl border-2 transition-all duration-300 snap-center
+                      min-w-[100px] whitespace-nowrap py-3 px-6 rounded-xl border-2 transition-all duration-300 snap-center font-medium
                       ${
                         isBooked
-                          ? "border-border bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+                          ? "border-muted bg-muted text-muted-foreground/50 cursor-not-allowed decoration-slice line-through opacity-70"
                           : selectedTime === time
                           ? "border-primary bg-primary text-white shadow-lg scale-105"
-                          : "border-border bg-card hover:border-primary/40 hover:shadow-md"
+                          : "border-border bg-card hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5"
                       }`}
                   >
                     {time}
-                    {isBooked && <div className="text-xs mt-1">Booked</div>}
+                    {isBooked && (
+                      <div className="text-[10px] mt-1 font-normal opacity-70">
+                        Ocupado
+                      </div>
+                    )}
                   </button>
                 );
               })}
