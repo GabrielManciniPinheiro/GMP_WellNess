@@ -7,7 +7,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Agora recebemos 'id' também para criar o link
     const {
       id,
       clientName,
@@ -18,11 +17,18 @@ export async function POST(request: Request) {
       therapistName,
     } = body;
 
-    // Link para a página de cancelamento
-    const cancelLink = `http://localhost:3000/cancel/${id}`;
+    // --- CORREÇÃO AQUI ---
+    // Define a URL base dependendo de onde o código está rodando
+    const baseUrl =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:3000"
+        : "https://wellness.gmpsaas.com";
+
+    const cancelLink = `${baseUrl}/cancel/${id}`;
+    // ---------------------
 
     const { data, error } = await resend.emails.send({
-      from: "GMP Wellness <onboarding@resend.dev>",
+      from: "GMP Wellness <agendamento@gmpsaas.com>", // Perfeito, já validamos o domínio!
       to: [clientEmail],
       subject: "Agendamento Confirmado - GMP Wellness",
       html: `
