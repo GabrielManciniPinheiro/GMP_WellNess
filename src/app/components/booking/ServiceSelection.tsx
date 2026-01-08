@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Gift } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 
 // Interface alinhada com as colunas do Banco de Dados
@@ -78,6 +78,28 @@ export function ServiceSelection({
 
   return (
     <div className="space-y-4">
+      {/*  CARD DE PROMOÇÃO DE ANIVERSÁRIO */}
+      <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-primary text-white p-2 rounded-full shrink-0 mt-1">
+          <Gift className="w-5 h-5" />
+        </div>
+        <div>
+          <h4 className="font-semibold text-primary mb-1">
+            Aniversariante do Mês?
+          </h4>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Você ganha{" "}
+            <span className="font-bold text-primary">20% de desconto</span> em
+            qualquer serviço!
+            <br />
+            <span className="text-xs opacity-80">
+              Válido para uma sessão. O desconto é aplicado no pagamento
+              presencial mediante apresentação de documento.
+            </span>
+          </p>
+        </div>
+      </div>
+
       {services.map((service) => (
         <button
           key={service.id}

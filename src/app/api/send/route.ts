@@ -13,6 +13,7 @@ export async function POST(request: Request) {
       clientEmail,
       date,
       time,
+      birthDate,
       serviceName,
       therapistName,
     } = body;
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
           <p><strong>Terapeuta:</strong> ${therapistName}</p>
           <p><strong>Data:</strong> ${date}</p>
           <p><strong>Horário:</strong> ${time}</p>
+          <p><strong>Nascimento:</strong> ${birthDate || "Não informado"}</p>
           <hr style="border: 1px solid #eee; margin: 20px 0;" />
           
           <p style="margin-bottom: 20px;">

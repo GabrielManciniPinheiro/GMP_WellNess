@@ -12,22 +12,21 @@ interface DateTimeSelectionProps {
   onSelectTime: (time: string) => void;
 }
 
-// Horários de semana (Seg-Sex)
-const weekDaySlots = [
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-];
+// 🟢 FUNÇÃO AUXILIAR: Gera horários de 30 em 30 min
+// Start: 8h, End: 20h
+const generateTimeSlots = (isSaturday: boolean) => {
+  const slots: string[] = [];
+  // Se for sábado vai até 14h, dia de semana vai até 20h
+  const endHour = isSaturday ? 14 : 20;
 
-// Horários de Sábado (até 14h)
-const saturdaySlots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00"];
+  for (let hour = 8; hour < endHour; hour++) {
+    // Adiciona a hora cheia (ex: 08:00)
+    slots.push(`${hour.toString().padStart(2, "0")}:00`);
+    // Adiciona a meia hora (ex: 08:30)
+    slots.push(`${hour.toString().padStart(2, "0")}:30`);
+  }
+  return slots;
+};
 
 export function DateTimeSelection({
   selectedDate,
@@ -39,9 +38,8 @@ export function DateTimeSelection({
   const [bookedTimes, setBookedTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [availableSlots, setAvailableSlots] = useState<string[]>(weekDaySlots);
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
 
-  // --- CORREÇÃO DE FUSO: Função manual para formatar YYYY-MM-DD ---
   const formatDateToLocalISO = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -49,17 +47,43 @@ export function DateTimeSelection({
     return `${year}-${month}-${day}`;
   };
 
+  // 🟢 LOGICA DE AGENDA: Atualiza slots quando muda a data
   useEffect(() => {
     if (selectedDate && selectedTherapist) {
       const dayOfWeek = selectedDate.getDay();
-      if (dayOfWeek === 6) {
-        setAvailableSlots(saturdaySlots);
-      } else {
-        setAvailableSlots(weekDaySlots);
+      const isSaturday = dayOfWeek === 6;
+
+      // 1. Gera todos os slots do dia (8h as 20h)
+      let slots = generateTimeSlots(isSaturday);
+
+      // 2. 🟢 REMOVER ALMOÇO: Filtra horários entre 12:00 e 13:30
+      // Removemos 12:00, 12:30 e 13:00. O atendimento volta 13:30.
+      slots = slots.filter((time) => {
+        return time !== "12:00" && time !== "12:30" && time !== "13:00";
+      });
+
+      // 3. 🟢 REMOVER PASSADO: Se for "Hoje", remove horários que já foram
+      const today = new Date();
+      if (selectedDate.toDateString() === today.toDateString()) {
+        const currentHour = today.getHours();
+        const currentMinutes = today.getMinutes();
+
+        slots = slots.filter((time) => {
+          const [slotHour, slotMinute] = time.split(":").map(Number);
+          // Se a hora do slot for maior que a atual, OK.
+          // Se for a mesma hora, o minuto do slot tem que ser maior.
+          if (slotHour > currentHour) return true;
+          if (slotHour === currentHour && slotMinute > currentMinutes)
+            return true;
+          return false;
+        });
       }
+
+      setAvailableSlots(slots);
       fetchAvailability();
     } else {
       setBookedTimes([]);
+      setAvailableSlots([]);
     }
   }, [selectedDate, selectedTherapist]);
 
@@ -70,7 +94,6 @@ export function DateTimeSelection({
     setError(null);
 
     try {
-      // Usa a formatação manual para garantir consistência com o banco
       const dateString = formatDateToLocalISO(selectedDate);
 
       const { data, error } = await supabase
@@ -102,9 +125,9 @@ export function DateTimeSelection({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date();
-    maxDate.setDate(today.getDate() + 30);
+    maxDate.setDate(today.getDate() + 30); // 🟢 Mantive 30 dias de janela
 
-    return date < today || date > maxDate || date.getDay() === 0;
+    return date < today || date > maxDate || date.getDay() === 0; // Domingo fechado
   };
 
   return (
@@ -139,6 +162,13 @@ export function DateTimeSelection({
           ) : error ? (
             <div className="text-center py-8">
               <p className="text-destructive text-sm">{error}</p>
+            </div>
+          ) : availableSlots.length === 0 ? (
+            /* 🟢 UX: Mensagem amigável se o dia já acabou */
+            <div className="text-center py-8 bg-muted/30 rounded-xl border border-dashed border-border">
+              <p className="text-muted-foreground">
+                Sem horários disponíveis para hoje.
+              </p>
             </div>
           ) : (
             <HorizontalScroll>

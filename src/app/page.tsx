@@ -46,6 +46,7 @@ export default function Page() {
     name: "",
     email: "",
     phone: "",
+    birthDate: "",
   });
   const [isBooking, setIsBooking] = useState(false);
 
@@ -115,6 +116,7 @@ export default function Page() {
           date: dateString,
           time: selectedTime,
           client_name: formData.name,
+          client_birth_date: formData.birthDate || null,
           client_email: formData.email,
           client_phone: formData.phone,
           status: "pending",
@@ -137,6 +139,7 @@ export default function Page() {
             clientEmail: formData.email,
             date: getDisplayDate(),
             time: selectedTime,
+            birthDate: formData.birthDate,
             serviceName: summaryData.serviceName,
             therapistName: summaryData.therapistName,
           }),
@@ -201,7 +204,7 @@ export default function Page() {
     setSelectedTherapist(null);
     setSelectedDate(undefined);
     setSelectedTime(null);
-    setFormData({ name: "", email: "", phone: "" });
+    setFormData({ name: "", email: "", phone: "", birthDate: "" });
     setSummaryData({ serviceName: "", therapistName: "", price: 0 });
   };
 

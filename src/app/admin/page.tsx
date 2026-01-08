@@ -16,22 +16,23 @@ import { Badge } from "../components/ui/badge";
 import { LogOut, Calendar, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "../components/ui/sonner";
+// 👇 IMPORTANDO O SEU COMPONENTE
+import HorizontalScroll from "../components/ui/horizontal-scroll";
 
 interface Appointment {
   id: string;
   date: string;
   time: string;
   client_name: string;
+  client_birth_date: string | null;
   client_phone: string;
   status: "pending" | "confirmed" | "completed" | "cancelled";
   services: { name: string } | null;
   therapists: { name: string } | null;
 }
 
-// --- CORREÇÃO DE FUSO: Formata String manualmente ---
-const formatDateString = (dateString: string) => {
+const formatDateString = (dateString: string | null) => {
   if (!dateString) return "-";
-  // O banco manda "2025-12-25", nós quebramos e montamos "25/12/2025"
   const [year, month, day] = dateString.split("-");
   return `${day}/${month}/${year}`;
 };
@@ -69,7 +70,7 @@ export default function AdminPage() {
           therapists (name)
         `
         )
-        .order("date", { ascending: true }) // Mais perto primeiro
+        .order("date", { ascending: true })
         .order("time", { ascending: true });
 
       if (error) throw error;
@@ -164,14 +165,15 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[#fffcfa]">
-      <header className="bg-white border-b border-primary/10 px-6 py-4 flex justify-between items-center shadow-sm">
+      <header className="bg-white border-b border-primary/10 px-6 py-4 flex justify-between items-center shadow-sm sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="bg-primary/10 p-2 rounded-full">
             <Calendar className="w-5 h-5 text-primary" />
           </div>
-          <h1 className="text-xl font-bold text-foreground">
+          <h1 className="text-xl font-bold text-foreground hidden md:block">
             Painel Administrativo
           </h1>
+          <h1 className="text-xl font-bold text-foreground md:hidden">Admin</h1>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground hidden md:block">
@@ -188,125 +190,139 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
         <div className="bg-white rounded-3xl shadow-lg shadow-primary/5 border border-primary/20 overflow-hidden">
           <div className="p-6 border-b border-primary/10 flex justify-between items-center bg-primary/5">
-            <h2 className="text-lg font-semibold text-primary">
-              Agendamentos Recentes
-            </h2>
+            <h2 className="text-lg font-semibold text-primary">Agendamentos</h2>
             <Button
               size="sm"
               className="bg-white text-primary border-2 border-primary hover:bg-primary hover:text-white transition-colors"
               onClick={fetchAppointments}
             >
-              Atualizar Lista
+              Atualizar
             </Button>
           </div>
 
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-primary/10 hover:bg-primary/10 border-b border-primary/20">
-                  <TableHead className="text-primary font-bold">
-                    Data / Hora
-                  </TableHead>
-                  <TableHead className="text-primary font-bold">
-                    Cliente
-                  </TableHead>
-                  <TableHead className="text-primary font-bold">
-                    Serviço / Terapeuta
-                  </TableHead>
-                  <TableHead className="text-primary font-bold">
-                    Status
-                  </TableHead>
-                  <TableHead className="text-right text-primary font-bold">
-                    Ações
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appointments.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center py-12 text-muted-foreground"
-                    >
-                      Nenhum agendamento encontrado.
-                    </TableCell>
+          {/* 👇 AQUI ESTÁ A MÁGICA: REUTILIZANDO SEU COMPONENTE */}
+          <HorizontalScroll>
+            {/* Forçamos uma largura mínima para a tabela expandir e ativar o scroll */}
+            <div className="min-w-[900px]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-primary/10 hover:bg-primary/10 border-b border-primary/20">
+                    <TableHead className="text-primary font-bold">
+                      Data / Hora
+                    </TableHead>
+                    <TableHead className="text-primary font-bold">
+                      Cliente
+                    </TableHead>
+                    <TableHead className="text-primary font-bold">
+                      Nascimento
+                    </TableHead>
+                    <TableHead className="text-primary font-bold">
+                      Serviço / Terapeuta
+                    </TableHead>
+                    <TableHead className="text-primary font-bold">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-right text-primary font-bold">
+                      Ações
+                    </TableHead>
                   </TableRow>
-                ) : (
-                  appointments.map((apt) => (
-                    <TableRow
-                      key={apt.id}
-                      className="border-b border-primary/10 hover:bg-primary/5 transition-colors"
-                    >
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          {/* Usa a função de formatação manual aqui */}
-                          <span className="text-foreground">
-                            {formatDateString(apt.date)}
-                          </span>
-                          <span className="text-xs text-primary">
-                            {apt.time}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">
-                            {apt.client_name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {apt.client_phone}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-foreground">
-                            {apt.services?.name || "Serviço removido"}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            com {apt.therapists?.name}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(apt.status)}</TableCell>
-                      <TableCell className="text-right">
-                        {apt.status === "pending" ||
-                        apt.status === "confirmed" ? (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 transition-all rounded-lg"
-                              onClick={() => updateStatus(apt.id, "completed")}
-                              title="Marcar como Concluído"
-                            >
-                              <CheckCircle2 className="w-5 h-5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100 transition-all rounded-lg"
-                              onClick={() => updateStatus(apt.id, "cancelled")}
-                              title="Cancelar Agendamento"
-                            >
-                              <XCircle className="w-5 h-5" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">
-                            Arquivado
-                          </span>
-                        )}
+                </TableHeader>
+                <TableBody>
+                  {appointments.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-12 text-muted-foreground"
+                      >
+                        Nenhum agendamento encontrado.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    appointments.map((apt) => (
+                      <TableRow
+                        key={apt.id}
+                        className="border-b border-primary/10 hover:bg-primary/5 transition-colors"
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span className="text-foreground">
+                              {formatDateString(apt.date)}
+                            </span>
+                            <span className="text-xs text-primary">
+                              {apt.time}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">
+                              {apt.client_name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {apt.client_phone}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-foreground">
+                            {formatDateString(apt.client_birth_date)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-foreground">
+                              {apt.services?.name || "Serviço removido"}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              com {apt.therapists?.name}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(apt.status)}</TableCell>
+                        <TableCell className="text-right">
+                          {apt.status === "pending" ||
+                          apt.status === "confirmed" ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100 transition-all rounded-lg"
+                                onClick={() =>
+                                  updateStatus(apt.id, "completed")
+                                }
+                                title="Concluir"
+                              >
+                                <CheckCircle2 className="w-5 h-5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100 transition-all rounded-lg"
+                                onClick={() =>
+                                  updateStatus(apt.id, "cancelled")
+                                }
+                                title="Cancelar"
+                              >
+                                <XCircle className="w-5 h-5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">
+                              Arquivado
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </HorizontalScroll>
+          {/* FIM DO HORIZONTAL SCROLL */}
         </div>
       </main>
       <Toaster />

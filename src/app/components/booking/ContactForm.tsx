@@ -7,6 +7,7 @@ interface ContactFormProps {
     name: string;
     email: string;
     phone: string;
+    birthDate: string;
   };
   onUpdateForm: (field: string, value: string) => void;
 }
@@ -62,6 +63,18 @@ export function ContactForm({ formData, onUpdateForm }: ContactFormProps) {
         />
       </div>
 
+      {/* CAMPO DE DATA DE NASCIMENTO */}
+      <div className="space-y-2">
+        <Label htmlFor="birthDate">Data de Nascimento</Label>
+        <Input
+          id="birthDate"
+          type="date"
+          value={formData.birthDate}
+          onChange={(e) => onUpdateForm("birthDate", e.target.value)}
+          className="h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary w-full"
+        />
+      </div>
+
       {/* EMAIL COM VALIDAÇÃO */}
       <div className="space-y-2">
         <Label htmlFor="email" className={emailError ? "text-destructive" : ""}>
@@ -103,10 +116,10 @@ export function ContactForm({ formData, onUpdateForm }: ContactFormProps) {
           maxLength={15}
           className="h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary"
         />
-        <p className="text-xs text-muted-foreground">
-          Digite apenas os números, nós formatamos para você.
-        </p>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Preencha seus dados corretamente para receber a confirmação.
+      </p>
     </div>
   );
 }
