@@ -18,8 +18,6 @@ export async function POST(request: Request) {
       therapistName,
     } = body;
 
-    // --- CORREÇÃO AQUI ---
-    // Define a URL base dependendo de onde o código está rodando
     const baseUrl =
       process.env.NODE_ENV === "development"
         ? "http://localhost:3000"

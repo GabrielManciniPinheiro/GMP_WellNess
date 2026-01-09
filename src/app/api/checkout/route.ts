@@ -3,13 +3,13 @@ import { MercadoPagoConfig, Preference } from "mercadopago";
 import { supabase } from "@/lib/supabaseClient";
 
 export async function POST(request: Request) {
-  console.log("💳 INICIANDO CHECKOUT 💳");
+  console.log("🧪 INICIANDO CHECKOUT (TESTE -> VERCEL) 🧪");
 
   try {
     const body = await request.json();
     const { appointmentId, title, price, email } = body;
 
-    // 1. Atualiza o status no banco para "Aguardando Pagamento"
+    // 1. Atualiza banco
     const { error: dbError } = await supabase
       .from("appointments")
       .update({ status: "awaiting_payment" })
@@ -17,37 +17,28 @@ export async function POST(request: Request) {
 
     if (dbError) throw dbError;
 
-    // 2. Verifica se o Token existe
+    // 2. Valida Token
     if (!process.env.MP_ACCESS_TOKEN) {
-      console.log("⚠️ Sem Token configurado.");
       return NextResponse.json(
-        { error: "Sem token de pagamento" },
+        { error: "Token não configurado" },
         { status: 500 }
       );
     }
 
-    // 3. Inicializa o SDK do Mercado Pago
     const client = new MercadoPagoConfig({
       accessToken: process.env.MP_ACCESS_TOKEN,
     });
 
-    // 4. DEFINE A URL CORRETA (AUTOMÁTICA) 🧠
-    // Se for 'development' (seu PC), usa localhost.
-    // Se for 'production' (Vercel), usa a URL oficial que você passou.
-    const baseUrl =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://wellness.gmpsaas.com";
-
-    console.log(`🔗 URL de Retorno configurada para: ${baseUrl}`);
-
     const preference = new Preference(client);
 
-    // Validade do link: 15 minutos
+    // 3. Validade de 30 min
     const expirationDate = new Date();
     expirationDate.setMinutes(expirationDate.getMinutes() + 15);
 
-    // 5. Cria a preferência de pagamento
+    // 4. URL Fixa de Produção (conforme solicitado)
+    const baseUrl = "https://wellness.gmpsaas.com";
+
+    // 5. Cria a preferência
     const result = await preference.create({
       body: {
         items: [
@@ -60,13 +51,11 @@ export async function POST(request: Request) {
           },
         ],
         payer: {
-          // Se o email vier vazio, usa um genérico para não travar
-          email: email || "cliente@gmpsaas.com",
+          email: email, // Usa estritamente o que veio do front
         },
         external_reference: appointmentId,
         date_of_expiration: expirationDate.toISOString(),
 
-        // As URLs agora são dinâmicas baseadas no ambiente
         back_urls: {
           success: `${baseUrl}/payment/success?id=${appointmentId}`,
           failure: `${baseUrl}/payment/failure?id=${appointmentId}`,
@@ -76,10 +65,10 @@ export async function POST(request: Request) {
       },
     });
 
-    console.log("✅ Link de Pagamento Gerado:", result.init_point);
+    console.log("✅ Link Gerado:", result.init_point);
     return NextResponse.json({ url: result.init_point });
   } catch (error: any) {
-    console.error("❌ ERRO NO CHECKOUT:", JSON.stringify(error, null, 2));
+    console.error("❌ ERRO NO CHECKOUT:", error);
     return NextResponse.json(
       { error: "Erro ao criar pagamento", details: error.message },
       { status: 500 }
