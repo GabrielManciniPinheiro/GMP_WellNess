@@ -7,7 +7,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { appointmentId, title, price, email } = body;
 
-    // 1. Atualiza status no banco para "Aguardando Pagamento"
     const { error: dbError } = await supabase
       .from("appointments")
       .update({ status: "awaiting_payment" })
@@ -15,31 +14,24 @@ export async function POST(request: Request) {
 
     if (dbError) throw dbError;
 
-    // 🛠️ MODO DE TESTE (SEM TOKEN)
     if (!process.env.MP_ACCESS_TOKEN) {
-      console.log("⚠️ [DEV MODE] Sem Token do MP. Simulando checkout...");
+      console.log("⚠️ Sem Token. Simulando...");
       return NextResponse.json({
-        url: "https://wellness.gmpsaas.com",
+        url: "https://www.google.com/search?q=simulacao+pagamento+gmp",
       });
     }
-
-    // =====================================================
-    // 🚀 MODO REAL (COM TOKEN)
-    // =====================================================
 
     const client = new MercadoPagoConfig({
       accessToken: process.env.MP_ACCESS_TOKEN,
     });
 
-    const baseUrl =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://gmpsaas.com";
+    const preference = new Preference(client);
 
+    // Validade de 15 minutos
     const expirationDate = new Date();
     expirationDate.setMinutes(expirationDate.getMinutes() + 15);
 
-    const preference = new Preference(client);
+    console.log("🚀 Criando preferência no Mercado Pago...");
 
     const result = await preference.create({
       body: {
@@ -55,20 +47,23 @@ export async function POST(request: Request) {
         payer: { email: email },
         external_reference: appointmentId,
         date_of_expiration: expirationDate.toISOString(),
+
         back_urls: {
-          success: `${baseUrl}/payment/success?id=${appointmentId}`,
-          failure: `${baseUrl}/payment/failure?id=${appointmentId}`,
-          pending: `${baseUrl}/payment/pending?id=${appointmentId}`,
+          success: "https://wellness.gmpsaas.com//search?q=sucesso",
+          failure: "https://wellness.gmpsaas.com//search?q=falha",
+          pending: "https://wellness.gmpsaas.com//search?q=pendente",
         },
         auto_return: "approved",
       },
     });
 
+    console.log("✅ SUCESSO! Link gerado:", result.init_point);
     return NextResponse.json({ url: result.init_point });
-  } catch (error) {
-    console.error("Erro no checkout:", error);
+  } catch (error: any) {
+    console.error("❌ ERRO NO CHECKOUT:", JSON.stringify(error, null, 2));
+
     return NextResponse.json(
-      { error: "Erro ao criar pagamento" },
+      { error: "Erro ao criar pagamento", details: error.message },
       { status: 500 }
     );
   }
