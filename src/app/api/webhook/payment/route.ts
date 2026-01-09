@@ -1,106 +1,96 @@
 import { NextResponse } from "next/server";
 import { MercadoPagoConfig, Payment } from "mercadopago";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@supabase/supabase-js"; // Importa direto do pacote
 import { Resend } from "resend";
 
-// Inicializa SDKs
-const client = new MercadoPagoConfig({
-  accessToken: process.env.MP_ACCESS_TOKEN!,
+// 1. Configurações
+const mpAccessToken = process.env.MP_ACCESS_TOKEN;
+const resendApiKey = process.env.RESEND_API_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // <--- CHAVE MESTRA
+
+// 2. Cliente MP
+const client = new MercadoPagoConfig({ accessToken: mpAccessToken! });
+
+// 3. Cliente Supabase ADMIN (Bypassa o RLS)
+// Usamos este cliente específico aqui para ter permissão de escrita sem usuário logado
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
 });
-const resend = new Resend(process.env.RESEND_API_KEY);
+
+const resend = new Resend(resendApiKey);
 
 export async function POST(request: Request) {
   try {
-    // 1. Ler parâmetros da URL do Webhook (Vem do Mercado Pago)
     const { searchParams } = new URL(request.url);
     const topic = searchParams.get("topic") || searchParams.get("type");
     const paymentId = searchParams.get("id") || searchParams.get("data.id");
 
-    // Ignora se não for aviso de pagamento
     if (topic !== "payment" || !paymentId) {
       return NextResponse.json({ status: "ignored" });
     }
 
-    // 2. Consultar o pagamento real no Mercado Pago (Segurança)
+    // Consulta status no Mercado Pago
     const payment = new Payment(client);
     const paymentData = await payment.get({ id: paymentId });
 
-    // 3. Se o pagamento foi APROVADO
+    // Se aprovado
     if (paymentData.status === "approved") {
       const appointmentId = paymentData.external_reference;
 
       console.log(
-        `💰 Pagamento aprovado para Agendamento ID: ${appointmentId}`
+        `Webhook: Pagamento ${paymentId} aprovado para agendamento ${appointmentId}`
       );
 
-      // a. Atualizar banco para 'scheduled'
-      const { data: appointment, error: dbError } = await supabase
+      // 4. Atualiza usando o ADMIN (supabaseAdmin)
+      const { data: appointment, error: dbError } = await supabaseAdmin
         .from("appointments")
         .update({ status: "scheduled" })
         .eq("id", appointmentId)
-        .select(`*, services(name), therapists(name)`) // Pega dados para o email
+        .select(`*, services(name), therapists(name)`)
         .single();
 
-      if (dbError || !appointment) {
-        console.error("❌ Erro ao atualizar banco:", dbError);
-        // Retorna 200 mesmo com erro interno para o MP parar de mandar notificações
-        return NextResponse.json({ status: "db_error" }, { status: 200 });
+      if (dbError) {
+        console.error("❌ Erro Webhook Banco:", dbError);
+        return NextResponse.json(
+          { error: "Falha ao atualizar banco" },
+          { status: 500 }
+        );
       }
 
-      // b. Preparar link de cancelamento/gerenciamento
-      // Em produção, deve ser o domínio real. Em dev, localhost.
-      // Como o Webhook roda no servidor, não temos 'window', usamos variável ou hardcoded em dev.
+      // Envia email...
       const baseUrl =
         process.env.NODE_ENV === "development"
           ? "http://localhost:3000"
-          : "https://wellness.gmpsaas.com"; //
+          : "https://wellness.gmpsaas.com";
 
-      const cancelLink = `${baseUrl}/cancel/${appointment.id}`;
-
-      // c. Enviar E-mail
-      await resend.emails.send({
-        from: "GMP Wellness <agendamento@gmpsaas.com>",
-        to: [appointment.client_email],
-        subject: "Pagamento Confirmado! Agendamento Realizado.",
-        html: `
-          <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #556b2F;">Pagamento Recebido! 🎉</h1>
-            <p>Olá, <strong>${appointment.client_name}</strong>.</p>
-            <p>Sua reserva foi confirmada com sucesso.</p>
-            
-            <hr style="border: 1px solid #eee; margin: 20px 0;" />
-            
-            <p><strong>Serviço:</strong> ${appointment.services?.name}</p>
-            <p><strong>Profissional:</strong> ${
-              appointment.therapists?.name
-            }</p>
-            <p><strong>Data:</strong> ${new Date(
-              appointment.date
-            ).toLocaleDateString("pt-BR")}</p>
-            <p><strong>Horário:</strong> ${appointment.time}</p>
-            
-            <hr style="border: 1px solid #eee; margin: 20px 0;" />
-            
-            <p style="font-size: 14px; color: #666;">
-              Se precisar reagendar, clique abaixo (mínimo 24h de antecedência):
-            </p>
-            <br/>
-            <a href="${cancelLink}" style="background-color: #556b2F; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-              Gerenciar Agendamento
-            </a>
-          </div>
-        `,
-      });
-
-      console.log("✅ E-mail enviado com sucesso.");
+      if (appointment) {
+        await resend.emails.send({
+          from: "GMP Wellness <agendamento@gmpsaas.com>",
+          to: [appointment.client_email],
+          subject: "Pagamento Confirmado! Agendamento Realizado.",
+          html: `
+              <h1>Pagamento Recebido!</h1>
+              <p>Olá, ${
+                appointment.client_name
+              }. Seu agendamento foi confirmado.</p>
+              <p>Serviço: ${appointment.services?.name}</p>
+              <p>Data: ${new Date(appointment.date).toLocaleDateString(
+                "pt-BR"
+              )}</p>
+              <a href="${baseUrl}/cancel/${appointment.id}">Gerenciar</a>
+            `,
+        });
+        console.log("✅ Email enviado.");
+      }
     }
 
     return NextResponse.json({ status: "ok" });
   } catch (error) {
-    console.error("❌ Erro fatal no Webhook:", error);
-    return NextResponse.json(
-      { status: "error", message: error },
-      { status: 500 }
-    );
+    console.error("❌ Erro Fatal Webhook:", error);
+    return NextResponse.json({ status: "error" }, { status: 500 });
   }
 }
