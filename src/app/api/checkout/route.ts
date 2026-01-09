@@ -57,11 +57,8 @@ export async function POST(request: Request) {
       },
     });
 
-    console.log("✅ SUCESSO! Link gerado:", result.init_point);
     return NextResponse.json({ url: result.init_point });
   } catch (error: any) {
-    console.error("❌ ERRO NO CHECKOUT:", JSON.stringify(error, null, 2));
-
     return NextResponse.json(
       { error: "Erro ao criar pagamento", details: error.message },
       { status: 500 }
