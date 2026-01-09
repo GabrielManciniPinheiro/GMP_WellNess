@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react"; // Suspense é necessário para useSearchParams no Next 13+
 import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
   Loader2,
   Lock,
+  RefreshCw, // Ícone de troca
 } from "lucide-react";
 import { ServiceSelection } from "./components/booking/ServiceSelection";
 import { TherapistSelection } from "./components/booking/TherapistSelection";
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 
 const steps = [
   { id: 1, name: "Serviço", icon: Sparkles },
@@ -27,7 +29,14 @@ const steps = [
   { id: 5, name: "Confirmar", icon: Sparkles },
 ];
 
-export default function Page() {
+// Componente Interno para isolar o uso de SearchParams (Boa prática Next.js)
+function BookingContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // 🔄 REAGENDAMENTO: Pega o ID antigo da URL
+  const rescheduleId = searchParams.get("rescheduleId");
+
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedTherapist, setSelectedTherapist] = useState<string | null>(
@@ -40,6 +49,7 @@ export default function Page() {
     serviceName: "",
     therapistName: "",
     price: 0,
+    duration: 30,
   });
 
   const [formData, setFormData] = useState({
@@ -48,14 +58,28 @@ export default function Page() {
     phone: "",
     birthDate: "",
   });
+
   const [isBooking, setIsBooking] = useState(false);
+
+  // Se estiver reagendando, mostra um Toast avisando
+  useEffect(() => {
+    if (rescheduleId) {
+      toast.info(
+        "Modo Reagendamento: Seu horário anterior continua ativo até você confirmar o novo.",
+        {
+          duration: 5000,
+          icon: <RefreshCw className="w-4 h-4" />,
+        }
+      );
+    }
+  }, [rescheduleId]);
 
   useEffect(() => {
     const fetchNames = async () => {
       if (selectedService) {
         const { data } = await supabase
           .from("services")
-          .select("name, price")
+          .select("name, price, duration")
           .eq("id", selectedService)
           .single();
         if (data) {
@@ -63,6 +87,7 @@ export default function Page() {
             ...prev,
             serviceName: data.name,
             price: data.price,
+            duration: data.duration,
           }));
         }
       }
@@ -107,7 +132,7 @@ export default function Page() {
       const day = String(selectedDate.getDate()).padStart(2, "0");
       const dateString = `${year}-${month}-${day}`;
 
-      // 1. SALVAR NO BANCO E RECUPERAR O ID
+      // 1. CRIA O NOVO AGENDAMENTO
       const { data: newAppointment, error } = await supabase
         .from("appointments")
         .insert({
@@ -116,25 +141,36 @@ export default function Page() {
           date: dateString,
           time: selectedTime,
           client_name: formData.name,
-          client_birth_date: formData.birthDate || null,
           client_email: formData.email,
           client_phone: formData.phone,
+          client_birth_date: formData.birthDate || null,
           status: "pending",
         })
-        .select() // <--- Importante: Retorna os dados criados
+        .select()
         .single();
 
       if (error) throw error;
 
-      // 2. ENVIAR E-MAIL COM O ID
+      // 🔄 2. SE FOR REAGENDAMENTO, CANCELA O ANTIGO AGORA
+      if (rescheduleId) {
+        const { error: cancelError } = await supabase
+          .from("appointments")
+          .update({ status: "cancelled" })
+          .eq("id", rescheduleId);
+
+        if (cancelError) {
+          console.error("Erro ao cancelar o antigo:", cancelError);
+          // Não paramos o fluxo, pois o novo já foi criado. Só logamos o erro.
+        }
+      }
+
+      // 3. ENVIA E-MAIL DO NOVO
       try {
         await fetch("/api/send", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            id: newAppointment.id, // <--- ID passado para o email
+            id: newAppointment.id,
             clientName: formData.name,
             clientEmail: formData.email,
             date: getDisplayDate(),
@@ -145,10 +181,20 @@ export default function Page() {
           }),
         });
       } catch (emailError) {
-        console.error("Erro ao enviar email (mas agendou):", emailError);
+        console.error("Erro ao enviar email:", emailError);
       }
 
-      toast.success("Agendamento realizado e e-mail enviado!");
+      // 4. FEEDBACK AO USUÁRIO
+      if (rescheduleId) {
+        toast.success(
+          "Reagendamento realizado! O horário anterior foi liberado."
+        );
+        // Limpa a URL para sair do modo reagendamento
+        router.replace("/");
+      } else {
+        toast.success("Agendamento realizado e e-mail enviado!");
+      }
+
       setCurrentStep(5);
     } catch (error) {
       console.error("Erro ao criar agendamento:", error);
@@ -159,9 +205,7 @@ export default function Page() {
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
   const updateFormData = (field: string, value: string) => {
@@ -205,12 +249,185 @@ export default function Page() {
     setSelectedDate(undefined);
     setSelectedTime(null);
     setFormData({ name: "", email: "", phone: "", birthDate: "" });
-    setSummaryData({ serviceName: "", therapistName: "", price: 0 });
+    setSummaryData({
+      serviceName: "",
+      therapistName: "",
+      price: 0,
+      duration: 30,
+    });
   };
 
   return (
+    <div className="max-w-4xl mx-auto px-4 py-8 md:py-12">
+      <div className="text-center mb-12">
+        {rescheduleId ? (
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4 animate-in fade-in zoom-in duration-500">
+            <RefreshCw className="w-8 h-8 text-blue-600 animate-spin-slow" />{" "}
+            {/* Ícone Diferente para Reagendar */}
+          </div>
+        ) : (
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4 animate-in fade-in zoom-in duration-500">
+            <Sparkles className="w-8 h-8 text-primary" />
+          </div>
+        )}
+
+        <h1 className="mb-2 text-3xl font-bold tracking-tight">
+          {rescheduleId ? "Reagendar Sessão" : "GMP Wellness"}
+        </h1>
+        <p className="text-muted-foreground">
+          {rescheduleId
+            ? "Escolha o novo horário para sua sessão"
+            : "Reserve sua experiência de massagem perfeita"}
+        </p>
+      </div>
+
+      <div className="mb-12">
+        <div className="flex items-center justify-between max-w-2xl mx-auto">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center flex-1">
+              <div className="flex flex-col items-center flex-1 relative">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 z-10 ${
+                    currentStep >= step.id
+                      ? "bg-primary text-white shadow-lg scale-110"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {currentStep > step.id ? (
+                    <span className="text-sm font-bold">✓</span>
+                  ) : (
+                    <span className="text-sm font-medium">{step.id}</span>
+                  )}
+                </div>
+                <span
+                  className={`text-xs mt-2 hidden md:block font-medium transition-colors duration-300 ${
+                    currentStep >= step.id
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {step.name}
+                </span>
+              </div>
+              {index < steps.length - 1 && (
+                <div className="flex-1 mx-2 relative h-0.5">
+                  <div className="absolute inset-0 bg-muted"></div>
+                  <div
+                    className="absolute inset-0 bg-primary transition-all duration-500 ease-out"
+                    style={{ width: currentStep > step.id ? "100%" : "0%" }}
+                  ></div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card rounded-3xl border border-border/50 p-6 md:p-10 mb-8 shadow-xl shadow-primary/5 transition-all duration-500">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {currentStep === 1 && (
+            <>
+              <h2 className="mb-6 text-2xl font-semibold">
+                Escolha seu Serviço
+              </h2>
+              <ServiceSelection
+                selectedService={selectedService}
+                onSelectService={setSelectedService}
+              />
+            </>
+          )}
+          {currentStep === 2 && (
+            <>
+              <h2 className="mb-6 text-2xl font-semibold">
+                Selecione seu Terapeuta
+              </h2>
+              <TherapistSelection
+                selectedTherapist={selectedTherapist}
+                onSelectTherapist={setSelectedTherapist}
+              />
+            </>
+          )}
+          {currentStep === 3 && (
+            <>
+              <h2 className="mb-6 text-2xl font-semibold">
+                Escolha Data e Hora
+              </h2>
+              <DateTimeSelection
+                selectedDate={selectedDate}
+                selectedTime={selectedTime}
+                selectedTherapist={selectedTherapist}
+                serviceDuration={summaryData.duration}
+                onSelectDate={setSelectedDate}
+                onSelectTime={setSelectedTime}
+              />
+            </>
+          )}
+          {currentStep === 4 && (
+            <>
+              <h2 className="mb-6 text-2xl font-semibold">
+                Suas Informações de Contato
+              </h2>
+              <ContactForm formData={formData} onUpdateForm={updateFormData} />
+            </>
+          )}
+          {currentStep === 5 && (
+            <BookingSummary
+              service={summaryData.serviceName}
+              therapist={summaryData.therapistName}
+              date={getDisplayDate()}
+              time={selectedTime || ""}
+              contact={formData}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-4 max-w-lg mx-auto">
+        {currentStep > 1 && currentStep < 5 && (
+          <Button
+            variant="outline"
+            onClick={handleBack}
+            className="flex-1 h-12 rounded-xl border-2 hover:bg-muted/50"
+          >
+            <ChevronLeft className="w-5 h-5 mr-2" /> Voltar
+          </Button>
+        )}
+        {currentStep < 5 ? (
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed() || isBooking}
+            className="flex-1 h-12 rounded-xl text-base shadow-lg hover:shadow-primary/20 transition-all hover:scale-[1.02]"
+          >
+            {isBooking ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Confirmando...
+              </>
+            ) : (
+              <>
+                {rescheduleId && currentStep === 4
+                  ? "Confirmar Reagendamento"
+                  : "Continuar"}{" "}
+                <ChevronRight className="w-5 h-5 ml-2" />
+              </>
+            )}
+          </Button>
+        ) : (
+          <Button
+            onClick={handleNewBooking}
+            className="flex-1 h-12 rounded-xl text-base shadow-lg animate-in zoom-in"
+          >
+            Realizar Novo Agendamento
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 🛡️ Wrapper Principal para Suspense
+export default function Page() {
+  return (
     <div className="min-h-screen bg-background text-foreground relative">
-      {/* --- BOTÃO DISCRETO DE ADMIN --- */}
       <div className="absolute top-4 right-4 z-50">
         <Link
           href="/admin"
@@ -224,159 +441,15 @@ export default function Page() {
         </Link>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8 md:py-12">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4 animate-in fade-in zoom-in duration-500">
-            <Sparkles className="w-8 h-8 text-primary" />
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
-          <h1 className="mb-2 text-3xl font-bold tracking-tight">
-            GMP Wellness
-          </h1>
-          <p className="text-muted-foreground">
-            Reserve sua experiência de massagem perfeita
-          </p>
-        </div>
-
-        <div className="mb-12">
-          <div className="flex items-center justify-between max-w-2xl mx-auto">
-            {steps.map((step, index) => (
-              <div key={step.id} className="flex items-center flex-1">
-                <div className="flex flex-col items-center flex-1 relative">
-                  <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 z-10 ${
-                      currentStep >= step.id
-                        ? "bg-primary text-white shadow-lg scale-110"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {currentStep > step.id ? (
-                      <span className="text-sm font-bold">✓</span>
-                    ) : (
-                      <span className="text-sm font-medium">{step.id}</span>
-                    )}
-                  </div>
-                  <span
-                    className={`text-xs mt-2 hidden md:block font-medium transition-colors duration-300 ${
-                      currentStep >= step.id
-                        ? "text-primary"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {step.name}
-                  </span>
-                </div>
-                {index < steps.length - 1 && (
-                  <div className="flex-1 mx-2 relative h-0.5">
-                    <div className="absolute inset-0 bg-muted"></div>
-                    <div
-                      className="absolute inset-0 bg-primary transition-all duration-500 ease-out"
-                      style={{ width: currentStep > step.id ? "100%" : "0%" }}
-                    ></div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-card rounded-3xl border border-border/50 p-6 md:p-10 mb-8 shadow-xl shadow-primary/5 transition-all duration-500">
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {currentStep === 1 && (
-              <>
-                <h2 className="mb-6 text-2xl font-semibold">
-                  Escolha seu Serviço
-                </h2>
-                <ServiceSelection
-                  selectedService={selectedService}
-                  onSelectService={setSelectedService}
-                />
-              </>
-            )}
-            {currentStep === 2 && (
-              <>
-                <h2 className="mb-6 text-2xl font-semibold">
-                  Selecione seu Terapeuta
-                </h2>
-                <TherapistSelection
-                  selectedTherapist={selectedTherapist}
-                  onSelectTherapist={setSelectedTherapist}
-                />
-              </>
-            )}
-            {currentStep === 3 && (
-              <>
-                <h2 className="mb-6 text-2xl font-semibold">
-                  Escolha Data e Hora
-                </h2>
-                <DateTimeSelection
-                  selectedDate={selectedDate}
-                  selectedTime={selectedTime}
-                  selectedTherapist={selectedTherapist}
-                  onSelectDate={setSelectedDate}
-                  onSelectTime={setSelectedTime}
-                />
-              </>
-            )}
-            {currentStep === 4 && (
-              <>
-                <h2 className="mb-6 text-2xl font-semibold">
-                  Suas Informações de Contato
-                </h2>
-                <ContactForm
-                  formData={formData}
-                  onUpdateForm={updateFormData}
-                />
-              </>
-            )}
-            {currentStep === 5 && (
-              <BookingSummary
-                service={summaryData.serviceName}
-                therapist={summaryData.therapistName}
-                date={getDisplayDate()}
-                time={selectedTime || ""}
-                contact={formData}
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="flex gap-4 max-w-lg mx-auto">
-          {currentStep > 1 && currentStep < 5 && (
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              className="flex-1 h-12 rounded-xl border-2 hover:bg-muted/50"
-            >
-              <ChevronLeft className="w-5 h-5 mr-2" /> Voltar
-            </Button>
-          )}
-          {currentStep < 5 ? (
-            <Button
-              onClick={handleNext}
-              disabled={!canProceed() || isBooking}
-              className="flex-1 h-12 rounded-xl text-base shadow-lg hover:shadow-primary/20 transition-all hover:scale-[1.02]"
-            >
-              {isBooking ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />{" "}
-                  Confirmando...
-                </>
-              ) : (
-                <>
-                  Continuar <ChevronRight className="w-5 h-5 ml-2" />
-                </>
-              )}
-            </Button>
-          ) : (
-            <Button
-              onClick={handleNewBooking}
-              className="flex-1 h-12 rounded-xl text-base shadow-lg animate-in zoom-in"
-            >
-              Realizar Novo Agendamento
-            </Button>
-          )}
-        </div>
-      </div>
+        }
+      >
+        <BookingContent />
+      </Suspense>
       <Toaster />
     </div>
   );

@@ -8,30 +8,39 @@ interface DateTimeSelectionProps {
   selectedDate: Date | undefined;
   selectedTime: string | null;
   selectedTherapist: string | null;
+  serviceDuration: number; // ⏱️ Recebe a duração do serviço escolhido
   onSelectDate: (date: Date | undefined) => void;
   onSelectTime: (time: string) => void;
 }
 
-// 🟢 FUNÇÃO AUXILIAR: Gera horários de 30 em 30 min
-// Start: 8h, End: 20h
+// Gera horários de 30 em 30 min (8h as 20h)
 const generateTimeSlots = (isSaturday: boolean) => {
   const slots: string[] = [];
-  // Se for sábado vai até 14h, dia de semana vai até 20h
   const endHour = isSaturday ? 14 : 20;
 
   for (let hour = 8; hour < endHour; hour++) {
-    // Adiciona a hora cheia (ex: 08:00)
     slots.push(`${hour.toString().padStart(2, "0")}:00`);
-    // Adiciona a meia hora (ex: 08:30)
     slots.push(`${hour.toString().padStart(2, "0")}:30`);
   }
   return slots;
+};
+
+// Auxiliar: Soma minutos a um horário (ex: "09:00" + 30 = "09:30")
+const addMinutesToTime = (time: string, minutes: number): string => {
+  const [h, m] = time.split(":").map(Number);
+  const date = new Date();
+  date.setHours(h, m, 0, 0);
+  date.setMinutes(date.getMinutes() + minutes);
+  const newH = String(date.getHours()).padStart(2, "0");
+  const newM = String(date.getMinutes()).padStart(2, "0");
+  return `${newH}:${newM}`;
 };
 
 export function DateTimeSelection({
   selectedDate,
   selectedTime,
   selectedTherapist,
+  serviceDuration,
   onSelectDate,
   onSelectTime,
 }: DateTimeSelectionProps) {
@@ -39,6 +48,7 @@ export function DateTimeSelection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [allDaySlots, setAllDaySlots] = useState<string[]>([]); // Guarda todos os slots do dia (base)
 
   const formatDateToLocalISO = (date: Date) => {
     const year = date.getFullYear();
@@ -47,22 +57,23 @@ export function DateTimeSelection({
     return `${year}-${month}-${day}`;
   };
 
-  // 🟢 LOGICA DE AGENDA: Atualiza slots quando muda a data
   useEffect(() => {
     if (selectedDate && selectedTherapist) {
       const dayOfWeek = selectedDate.getDay();
       const isSaturday = dayOfWeek === 6;
 
-      // 1. Gera todos os slots do dia (8h as 20h)
+      // 1. Gera slots base do dia
       let slots = generateTimeSlots(isSaturday);
 
-      // 2. 🟢 REMOVER ALMOÇO: Filtra horários entre 12:00 e 13:30
-      // Removemos 12:00, 12:30 e 13:00. O atendimento volta 13:30.
+      // 2. Remove Almoço (12:00 as 13:30)
       slots = slots.filter((time) => {
         return time !== "12:00" && time !== "12:30" && time !== "13:00";
       });
 
-      // 3. 🟢 REMOVER PASSADO: Se for "Hoje", remove horários que já foram
+      // Salva os slots "estruturais" do dia para cálculos futuros
+      setAllDaySlots(slots);
+
+      // 3. Remove Passado (se for hoje)
       const today = new Date();
       if (selectedDate.toDateString() === today.toDateString()) {
         const currentHour = today.getHours();
@@ -70,8 +81,6 @@ export function DateTimeSelection({
 
         slots = slots.filter((time) => {
           const [slotHour, slotMinute] = time.split(":").map(Number);
-          // Se a hora do slot for maior que a atual, OK.
-          // Se for a mesma hora, o minuto do slot tem que ser maior.
           if (slotHour > currentHour) return true;
           if (slotHour === currentHour && slotMinute > currentMinutes)
             return true;
@@ -96,18 +105,45 @@ export function DateTimeSelection({
     try {
       const dateString = formatDateToLocalISO(selectedDate);
 
+      // ⏱️ LOGICA 1: Busca agendamentos E suas durações
       const { data, error } = await supabase
         .from("appointments")
-        .select("time")
+        .select(
+          `
+          time,
+          services ( duration )
+        `
+        )
         .eq("therapist_id", selectedTherapist)
         .eq("date", dateString)
         .neq("status", "cancelled");
 
       if (error) throw error;
 
+      const busySlots: string[] = [];
+
+      // ⏱️ LOGICA 2: Preenche os slots ocupados baseado na duração dos agendamentos existentes
       if (data) {
-        const busyTimes = data.map((item) => item.time);
-        setBookedTimes(busyTimes);
+        data.forEach((appt: any) => {
+          const startTime = appt.time;
+          const duration = appt.services?.duration || 30; // Default 30 min
+
+          // Marca o horário de início como ocupado
+          busySlots.push(startTime);
+
+          // Marca os próximos horários como ocupados dependendo da duração
+          // Ex: 09:00 (60min) -> Bloqueia 09:00 e 09:30
+          let slotsToBlock = duration / 30 - 1; // -1 pq o start já foi
+          let currentTime = startTime;
+
+          while (slotsToBlock > 0) {
+            currentTime = addMinutesToTime(currentTime, 30);
+            busySlots.push(currentTime);
+            slotsToBlock--;
+          }
+        });
+
+        setBookedTimes(busySlots);
       }
     } catch (err) {
       console.error("Erro ao buscar disponibilidade:", err);
@@ -117,17 +153,45 @@ export function DateTimeSelection({
     }
   };
 
-  const isTimeBooked = (time: string) => {
-    return bookedTimes.includes(time);
+  // ⏱️ LOGICA 3: Valida se o NOVO serviço cabe na agenda
+  // (Verifica colisões futuras baseado na duração do serviço escolhido)
+  const isSlotValidForService = (startTime: string) => {
+    // 1. O horário de início já está ocupado?
+    if (bookedTimes.includes(startTime)) return false;
+
+    // 2. Quantos slots de 30min esse novo serviço precisa?
+    const slotsNeeded = Math.ceil(serviceDuration / 30);
+
+    let currentTime = startTime;
+
+    // Verifica cada slot necessário
+    for (let i = 0; i < slotsNeeded; i++) {
+      // Se não é o primeiro slot (que já sabemos que existe pois foi passado na função),
+      // precisamos ver se ele existe na grade do dia (não caiu no almoço ou pós-expediente)
+
+      // O horário deve existir na grade do dia (allDaySlots)
+      // E não pode estar na lista de ocupados (bookedTimes)
+      // Nota: Usamos allDaySlots para garantir que não avance para o almoço (que foi removido de allDaySlots)
+      const existsInDay = allDaySlots.includes(currentTime);
+      const isBooked = bookedTimes.includes(currentTime);
+
+      if (!existsInDay || isBooked) {
+        return false; // Colisão detectada!
+      }
+
+      // Avança para o próximo bloco de 30min
+      currentTime = addMinutesToTime(currentTime, 30);
+    }
+
+    return true;
   };
 
   const isDateDisabled = (date: Date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date();
-    maxDate.setDate(today.getDate() + 30); // 🟢 Mantive 30 dias de janela
-
-    return date < today || date > maxDate || date.getDay() === 0; // Domingo fechado
+    maxDate.setDate(today.getDate() + 30);
+    return date < today || date > maxDate || date.getDay() === 0;
   };
 
   return (
@@ -164,7 +228,6 @@ export function DateTimeSelection({
               <p className="text-destructive text-sm">{error}</p>
             </div>
           ) : availableSlots.length === 0 ? (
-            /* 🟢 UX: Mensagem amigável se o dia já acabou */
             <div className="text-center py-8 bg-muted/30 rounded-xl border border-dashed border-border">
               <p className="text-muted-foreground">
                 Sem horários disponíveis para hoje.
@@ -173,16 +236,18 @@ export function DateTimeSelection({
           ) : (
             <HorizontalScroll>
               {availableSlots.map((time) => {
-                const isBooked = isTimeBooked(time);
+                // ⏱️ ALTERAÇÃO: Usa a nova lógica de validação
+                const isValid = isSlotValidForService(time);
+
                 return (
                   <button
                     key={time}
-                    onClick={() => !isBooked && onSelectTime(time)}
-                    disabled={isBooked}
+                    onClick={() => isValid && onSelectTime(time)}
+                    disabled={!isValid}
                     className={`
                       min-w-[100px] whitespace-nowrap py-3 px-6 rounded-xl border-2 transition-all duration-300 snap-center font-medium
                       ${
-                        isBooked
+                        !isValid
                           ? "border-muted bg-muted text-muted-foreground/50 cursor-not-allowed decoration-slice line-through opacity-70"
                           : selectedTime === time
                           ? "border-primary bg-primary text-white shadow-lg scale-105"
@@ -190,7 +255,7 @@ export function DateTimeSelection({
                       }`}
                   >
                     {time}
-                    {isBooked && (
+                    {!isValid && (
                       <div className="text-[10px] mt-1 font-normal opacity-70">
                         Ocupado
                       </div>
