@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       const baseUrl =
         process.env.NODE_ENV === "development"
           ? "http://localhost:3000"
-          : "https://gmpsaas.com"; // ⚠️ Ajuste este domínio quando subir
+          : "https://wellness.gmpsaas.com"; //
 
       const cancelLink = `${baseUrl}/cancel/${appointment.id}`;
 
