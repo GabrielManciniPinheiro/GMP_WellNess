@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { Lock, UserCheck } from "lucide-react";
 
 interface ContactFormProps {
   formData: {
@@ -10,19 +11,21 @@ interface ContactFormProps {
     birthDate: string;
   };
   onUpdateForm: (field: string, value: string) => void;
+  readOnly?: boolean; // 🔒 Agora bloqueia TUDO
 }
 
-export function ContactForm({ formData, onUpdateForm }: ContactFormProps) {
+export function ContactForm({
+  formData,
+  onUpdateForm,
+  readOnly,
+}: ContactFormProps) {
   const [emailError, setEmailError] = useState("");
 
-  // Função para validar formato de email
   const validateEmail = (email: string) => {
-    // Regex padrão para validação de email (exige texto + @ + texto + . + texto)
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return regex.test(email);
   };
 
-  // Valida quando o usuário clica fora do campo (onBlur)
   const handleEmailBlur = () => {
     if (formData.email && !validateEmail(formData.email)) {
       setEmailError("Por favor, insira um e-mail válido.");
@@ -31,7 +34,6 @@ export function ContactForm({ formData, onUpdateForm }: ContactFormProps) {
     }
   };
 
-  // Mantivemos a lógica do telefone que criamos antes
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
     value = value.replace(/\D/g, "");
@@ -50,52 +52,63 @@ export function ContactForm({ formData, onUpdateForm }: ContactFormProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* 🔒 AVISO DE MODO LEITURA */}
+      {readOnly && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3 text-blue-800 text-sm">
+          <UserCheck className="w-5 h-5 shrink-0 mt-0.5" />
+          <p>
+            <strong>Confirmando identidade:</strong> Estamos usando seus dados
+            do agendamento original. Se precisar alterar seu telefone ou nome,
+            entre em contato com a clínica.
+          </p>
+        </div>
+      )}
+
       {/* NOME */}
       <div className="space-y-2">
-        <Label htmlFor="name">Nome Completo</Label>
+        <div className="flex justify-between">
+          <Label htmlFor="name">Nome Completo</Label>
+          {readOnly && <Lock className="w-3 h-3 text-muted-foreground" />}
+        </div>
         <Input
           id="name"
           type="text"
           placeholder="Digite seu nome"
           value={formData.name}
+          disabled={readOnly}
           onChange={(e) => onUpdateForm("name", e.target.value)}
-          className="h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary"
+          className={`h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary 
+            ${readOnly ? "opacity-70 bg-muted cursor-not-allowed" : ""}`}
         />
       </div>
 
-      {/* CAMPO DE DATA DE NASCIMENTO */}
+      {/* EMAIL */}
       <div className="space-y-2">
-        <Label htmlFor="birthDate">Data de Nascimento</Label>
-        <Input
-          id="birthDate"
-          type="date"
-          value={formData.birthDate}
-          onChange={(e) => onUpdateForm("birthDate", e.target.value)}
-          className="h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary w-full"
-        />
-      </div>
-
-      {/* EMAIL COM VALIDAÇÃO */}
-      <div className="space-y-2">
-        <Label htmlFor="email" className={emailError ? "text-destructive" : ""}>
-          E-mail
-        </Label>
+        <div className="flex justify-between">
+          <Label
+            htmlFor="email"
+            className={emailError ? "text-destructive" : ""}
+          >
+            E-mail
+          </Label>
+          {readOnly && <Lock className="w-3 h-3 text-muted-foreground" />}
+        </div>
         <Input
           id="email"
           type="email"
           placeholder="seu@email.com"
           value={formData.email}
+          disabled={readOnly}
           onChange={(e) => {
             onUpdateForm("email", e.target.value);
-            // Se o usuário começar a corrigir, limpa o erro
             if (emailError) setEmailError("");
           }}
-          onBlur={handleEmailBlur} // Dispara a validação ao sair do campo
+          onBlur={handleEmailBlur}
           className={`h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary ${
             emailError
               ? "border-destructive focus-visible:ring-destructive"
               : ""
-          }`}
+          } ${readOnly ? "opacity-70 bg-muted cursor-not-allowed" : ""}`}
         />
         {emailError && (
           <p className="text-sm text-destructive font-medium animate-in slide-in-from-top-1">
@@ -104,22 +117,43 @@ export function ContactForm({ formData, onUpdateForm }: ContactFormProps) {
         )}
       </div>
 
-      {/* TELEFONE */}
-      <div className="space-y-2">
-        <Label htmlFor="phone">Telefone / WhatsApp</Label>
-        <Input
-          id="phone"
-          type="tel"
-          placeholder="(11) 99999-9999"
-          value={formData.phone}
-          onChange={handlePhoneChange}
-          maxLength={15}
-          className="h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* TELEFONE */}
+        <div className="space-y-2">
+          <Label htmlFor="phone">Telefone / WhatsApp</Label>
+          <Input
+            id="phone"
+            type="tel"
+            placeholder="(11) 99999-9999"
+            value={formData.phone}
+            disabled={readOnly}
+            onChange={handlePhoneChange}
+            maxLength={15}
+            className={`h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary 
+                ${readOnly ? "opacity-70 bg-muted cursor-not-allowed" : ""}`}
+          />
+        </div>
+
+        {/* DATA DE NASCIMENTO */}
+        <div className="space-y-2">
+          <Label htmlFor="birthDate">Data de Nascimento</Label>
+          <Input
+            id="birthDate"
+            type="date"
+            value={formData.birthDate}
+            disabled={readOnly}
+            onChange={(e) => onUpdateForm("birthDate", e.target.value)}
+            className={`h-12 rounded-xl border-2 bg-input-background focus-visible:ring-primary w-full 
+                ${readOnly ? "opacity-70 bg-muted cursor-not-allowed" : ""}`}
+          />
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Preencha seus dados corretamente para receber a confirmação.
-      </p>
+
+      {!readOnly && (
+        <p className="text-xs text-muted-foreground pt-1">
+          Preencha seus dados corretamente para receber a confirmação.
+        </p>
+      )}
     </div>
   );
 }

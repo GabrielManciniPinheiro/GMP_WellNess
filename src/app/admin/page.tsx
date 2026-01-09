@@ -13,20 +13,27 @@ import {
 } from "../components/ui/table";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { LogOut, Calendar, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import {
+  LogOut,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Clock,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "../components/ui/sonner";
-// 👇 IMPORTANDO O SEU COMPONENTE
 import HorizontalScroll from "../components/ui/horizontal-scroll";
 
 interface Appointment {
   id: string;
+  created_at: string; // Importante para calcular a idade do registro
   date: string;
   time: string;
   client_name: string;
   client_birth_date: string | null;
   client_phone: string;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "awaiting_payment" | "scheduled" | "completed" | "cancelled";
   services: { name: string } | null;
   therapists: { name: string } | null;
 }
@@ -76,7 +83,24 @@ export default function AdminPage() {
       if (error) throw error;
 
       if (data) {
-        setAppointments(data as any);
+        // 🧹 LIMPEZA AUTOMÁTICA (Regra de 15 Minutos)
+        const cleanData = (data as any).filter((apt: Appointment) => {
+          if (apt.status === "awaiting_payment") {
+            const createdAt = new Date(apt.created_at);
+            const now = new Date();
+
+            // Diferença em milissegundos
+            const diffInMs = now.getTime() - createdAt.getTime();
+            // Diferença em minutos
+            const diffInMinutes = diffInMs / (1000 * 60);
+
+            // Se foi criado há mais de 15 min e não pagou, esconde.
+            return diffInMinutes < 15;
+          }
+          return true; // Outros status aparecem sempre
+        });
+
+        setAppointments(cleanData);
       }
     } catch (error) {
       console.error("Erro ao buscar agendamentos:", error);
@@ -97,7 +121,11 @@ export default function AdminPage() {
 
       toast.success(
         `Status atualizado para: ${
-          newStatus === "completed" ? "Concluído" : "Cancelado"
+          newStatus === "completed"
+            ? "Concluído"
+            : newStatus === "cancelled"
+            ? "Cancelado"
+            : newStatus
         }`
       );
       fetchAppointments();
@@ -114,22 +142,22 @@ export default function AdminPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "pending":
+      case "scheduled":
         return (
           <Badge
             variant="outline"
-            className="bg-yellow-50 text-yellow-700 border-yellow-200"
+            className="bg-blue-50 text-blue-700 border-blue-200"
           >
-            Pendente
+            Agendado
           </Badge>
         );
-      case "confirmed":
+      case "awaiting_payment":
         return (
           <Badge
             variant="outline"
-            className="bg-primary/10 text-primary border-primary/20"
+            className="bg-gray-50 text-gray-600 border-gray-200 gap-1"
           >
-            Confirmado
+            <Clock className="w-3 h-3" /> Aguardando Pagamento
           </Badge>
         );
       case "completed":
@@ -203,9 +231,7 @@ export default function AdminPage() {
             </Button>
           </div>
 
-          {/* 👇 AQUI ESTÁ A MÁGICA: REUTILIZANDO SEU COMPONENTE */}
           <HorizontalScroll>
-            {/* Forçamos uma largura mínima para a tabela expandir e ativar o scroll */}
             <div className="min-w-[900px]">
               <Table>
                 <TableHeader>
@@ -281,11 +307,13 @@ export default function AdminPage() {
                             </span>
                           </div>
                         </TableCell>
+
                         <TableCell>{getStatusBadge(apt.status)}</TableCell>
+
                         <TableCell className="text-right">
-                          {apt.status === "pending" ||
-                          apt.status === "confirmed" ? (
-                            <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-2">
+                            {/* Concluir: Só para Agendado */}
+                            {apt.status === "scheduled" && (
                               <Button
                                 size="icon"
                                 variant="ghost"
@@ -293,10 +321,15 @@ export default function AdminPage() {
                                 onClick={() =>
                                   updateStatus(apt.id, "completed")
                                 }
-                                title="Concluir"
+                                title="Marcar como Concluído"
                               >
                                 <CheckCircle2 className="w-5 h-5" />
                               </Button>
+                            )}
+
+                            {/* Cancelar: Para Agendado ou Aguardando */}
+                            {(apt.status === "scheduled" ||
+                              apt.status === "awaiting_payment") && (
                               <Button
                                 size="icon"
                                 variant="ghost"
@@ -304,16 +337,19 @@ export default function AdminPage() {
                                 onClick={() =>
                                   updateStatus(apt.id, "cancelled")
                                 }
-                                title="Cancelar"
+                                title="Cancelar Agendamento"
                               >
                                 <XCircle className="w-5 h-5" />
                               </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">
-                              Arquivado
-                            </span>
-                          )}
+                            )}
+
+                            {(apt.status === "completed" ||
+                              apt.status === "cancelled") && (
+                              <span className="text-xs text-muted-foreground italic pr-2">
+                                Arquivado
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -322,7 +358,6 @@ export default function AdminPage() {
               </Table>
             </div>
           </HorizontalScroll>
-          {/* FIM DO HORIZONTAL SCROLL */}
         </div>
       </main>
       <Toaster />

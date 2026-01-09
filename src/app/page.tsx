@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react"; // Suspense é necessário para useSearchParams no Next 13+
+import { useState, useEffect, Suspense } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
   Loader2,
   Lock,
-  RefreshCw, // Ícone de troca
+  RefreshCw,
 } from "lucide-react";
 import { ServiceSelection } from "./components/booking/ServiceSelection";
 import { TherapistSelection } from "./components/booking/TherapistSelection";
@@ -29,7 +29,6 @@ const steps = [
   { id: 5, name: "Confirmar", icon: Sparkles },
 ];
 
-// Componente Interno para isolar o uso de SearchParams (Boa prática Next.js)
 function BookingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -72,6 +71,31 @@ function BookingContent() {
         }
       );
     }
+  }, [rescheduleId]);
+
+  // 🔄 EFEITO NOVO: Se for reagendamento, busca dados originais e preenche
+  useEffect(() => {
+    const fetchOriginalAppointment = async () => {
+      if (!rescheduleId) return;
+
+      const { data, error } = await supabase
+        .from("appointments")
+        .select("client_name, client_email, client_phone, client_birth_date")
+        .eq("id", rescheduleId)
+        .single();
+
+      if (data && !error) {
+        setFormData({
+          name: data.client_name,
+          email: data.client_email,
+          phone: data.client_phone,
+          birthDate: data.client_birth_date || "",
+        });
+        toast.success("Dados carregados. Confirme o novo horário.");
+      }
+    };
+
+    fetchOriginalAppointment();
   }, [rescheduleId]);
 
   useEffect(() => {
@@ -127,10 +151,46 @@ function BookingContent() {
     setIsBooking(true);
 
     try {
+      // 🛡️ SEGURANÇA: Validação do Reagendamento antes de criar
+      if (rescheduleId) {
+        const { data: oldAppt, error: oldError } = await supabase
+          .from("appointments")
+          .select("client_email, status")
+          .eq("id", rescheduleId)
+          .single();
+
+        if (oldError || !oldAppt) {
+          toast.error("Agendamento original inválido.");
+          setIsBooking(false);
+          return;
+        }
+
+        // Garante que o email é o mesmo
+        if (oldAppt.client_email !== formData.email) {
+          toast.error("Erro de segurança: E-mail não corresponde ao original.");
+          setIsBooking(false);
+          return;
+        }
+
+        // 🛡️ TRAVA 2 (AQUI ESTÁ A CORREÇÃO):
+        // Só pode reagendar se o original estiver PAGO/CONFIRMADO
+        if (oldAppt.status !== "scheduled" && oldAppt.status !== "confirmed") {
+          toast.error(
+            "Este agendamento não é válido para reagendamento (Não pago ou cancelado)."
+          );
+          setIsBooking(false);
+          return;
+        }
+      }
+
       const year = selectedDate.getFullYear();
       const month = String(selectedDate.getMonth() + 1).padStart(2, "0");
       const day = String(selectedDate.getDate()).padStart(2, "0");
       const dateString = `${year}-${month}-${day}`;
+
+      // Se for reagendamento, já nasce confirmado ("scheduled").
+      // Se for novo, nasce aguardando pagamento ("awaiting_payment").
+      const initialStatus = rescheduleId ? "scheduled" : "awaiting_payment";
 
       // 1. CRIA O NOVO AGENDAMENTO
       const { data: newAppointment, error } = await supabase
@@ -144,63 +204,83 @@ function BookingContent() {
           client_email: formData.email,
           client_phone: formData.phone,
           client_birth_date: formData.birthDate || null,
-          status: "pending",
+          status: initialStatus,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      // 🔄 2. SE FOR REAGENDAMENTO, CANCELA O ANTIGO AGORA
+      // ============================================================
+      // 🛤️ CAMINHO A: É REAGENDAMENTO (PASSE LIVRE)
+      // ============================================================
       if (rescheduleId) {
-        const { error: cancelError } = await supabase
+        // Cancela o antigo
+        await supabase
           .from("appointments")
           .update({ status: "cancelled" })
           .eq("id", rescheduleId);
 
-        if (cancelError) {
-          console.error("Erro ao cancelar o antigo:", cancelError);
-          // Não paramos o fluxo, pois o novo já foi criado. Só logamos o erro.
-        }
-      }
+        // Envia e-mail de confirmação do novo
+        await sendConfirmationEmail(newAppointment.id);
 
-      // 3. ENVIA E-MAIL DO NOVO
-      try {
-        await fetch("/api/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: newAppointment.id,
-            clientName: formData.name,
-            clientEmail: formData.email,
-            date: getDisplayDate(),
-            time: selectedTime,
-            birthDate: formData.birthDate,
-            serviceName: summaryData.serviceName,
-            therapistName: summaryData.therapistName,
-          }),
-        });
-      } catch (emailError) {
-        console.error("Erro ao enviar email:", emailError);
-      }
-
-      // 4. FEEDBACK AO USUÁRIO
-      if (rescheduleId) {
         toast.success(
           "Reagendamento realizado! O horário anterior foi liberado."
         );
-        // Limpa a URL para sair do modo reagendamento
         router.replace("/");
-      } else {
-        toast.success("Agendamento realizado e e-mail enviado!");
+        setCurrentStep(5);
+        return; // PARA AQUI, NÃO COBRA
       }
 
-      setCurrentStep(5);
+      // ============================================================
+      // 🛤️ CAMINHO B: É NOVO (COBRAR PAGAMENTO)
+      // ============================================================
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appointmentId: newAppointment.id,
+          title: `Reserva: ${summaryData.serviceName}`,
+          price: 35.0, // Taxa fixa
+          email: formData.email,
+        }),
+      });
+
+      const checkoutData = await response.json();
+
+      if (checkoutData.url) {
+        // REDIRECIONA PARA O MERCADO PAGO
+        window.location.href = checkoutData.url;
+      } else {
+        toast.error("Erro ao gerar link de pagamento.");
+      }
     } catch (error) {
       console.error("Erro ao criar agendamento:", error);
       toast.error("Não foi possível agendar. Tente novamente.");
     } finally {
       setIsBooking(false);
+    }
+  };
+
+  // Função auxiliar de envio de e-mail
+  const sendConfirmationEmail = async (apptId: string) => {
+    try {
+      await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: apptId,
+          clientName: formData.name,
+          clientEmail: formData.email,
+          date: getDisplayDate(),
+          time: selectedTime,
+          birthDate: formData.birthDate,
+          serviceName: summaryData.serviceName,
+          therapistName: summaryData.therapistName,
+        }),
+      });
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -365,9 +445,16 @@ function BookingContent() {
           {currentStep === 4 && (
             <>
               <h2 className="mb-6 text-2xl font-semibold">
-                Suas Informações de Contato
+                {rescheduleId
+                  ? "Confirme seus Dados"
+                  : "Suas Informações de Contato"}
               </h2>
-              <ContactForm formData={formData} onUpdateForm={updateFormData} />
+              {/* 🔒 AQUI: Passamos readOnly se tiver ID de reagendamento */}
+              <ContactForm
+                formData={formData}
+                onUpdateForm={updateFormData}
+                readOnly={!!rescheduleId}
+              />
             </>
           )}
           {currentStep === 5 && (

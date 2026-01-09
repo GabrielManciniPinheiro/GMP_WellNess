@@ -67,7 +67,7 @@ export function DateTimeSelection({
 
       // 2. Remove Almoço (12:00 as 13:30)
       slots = slots.filter((time) => {
-        return time !== "12:00" && time !== "12:30" && time !== "13:00";
+        return time !== "12:00" && time !== "12:30" && time !== "13:30";
       });
 
       // Salva os slots "estruturais" do dia para cálculos futuros
@@ -105,7 +105,7 @@ export function DateTimeSelection({
     try {
       const dateString = formatDateToLocalISO(selectedDate);
 
-      // ⏱️ LOGICA 1: Busca agendamentos E suas durações
+      // Busca agendamentos E suas durações
       const { data, error } = await supabase
         .from("appointments")
         .select(
@@ -122,7 +122,7 @@ export function DateTimeSelection({
 
       const busySlots: string[] = [];
 
-      // ⏱️ LOGICA 2: Preenche os slots ocupados baseado na duração dos agendamentos existentes
+      //  Preenche os slots ocupados baseado na duração dos agendamentos existentes
       if (data) {
         data.forEach((appt: any) => {
           const startTime = appt.time;
@@ -153,7 +153,7 @@ export function DateTimeSelection({
     }
   };
 
-  // ⏱️ LOGICA 3: Valida se o NOVO serviço cabe na agenda
+  //  Valida se o NOVO serviço cabe na agenda
   // (Verifica colisões futuras baseado na duração do serviço escolhido)
   const isSlotValidForService = (startTime: string) => {
     // 1. O horário de início já está ocupado?
@@ -236,7 +236,6 @@ export function DateTimeSelection({
           ) : (
             <HorizontalScroll>
               {availableSlots.map((time) => {
-                // ⏱️ ALTERAÇÃO: Usa a nova lógica de validação
                 const isValid = isSlotValidForService(time);
 
                 return (
