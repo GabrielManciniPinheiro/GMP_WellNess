@@ -164,11 +164,11 @@ function SuccessContent() {
                 Titular do Agendamento
               </h4>
               <p className="text-gray-600">
-                <span className="font-medium">Nome:</span>{" "}
+                <span className="font-medium">Nome: </span>{" "}
                 {appointment.client_name}
               </p>
               <p className="text-gray-600">
-                <span className="font-medium">Tel:</span>{" "}
+                <span className="font-medium">Telefone: </span>{" "}
                 {appointment.client_phone}
               </p>
             </div>

@@ -18,48 +18,103 @@ export async function POST(request: Request) {
       therapistName,
     } = body;
 
+    // Define a URL base (Local ou Produção)
     const baseUrl =
       process.env.NODE_ENV === "development"
         ? "http://localhost:3000"
         : "https://wellness.gmpsaas.com";
 
     const cancelLink = `${baseUrl}/cancel/${id}`;
-    // ---------------------
+
+    // Formata a data se necessário (opcional, apenas para garantir)
+    // const formattedDate = new Date(date).toLocaleDateString('pt-BR');
 
     const { data, error } = await resend.emails.send({
-      from: "GMP Wellness <agendamento@gmpsaas.com>", // Perfeito, já validamos o domínio!
+      from: "GMP Wellness <agendamento@gmpsaas.com>",
       to: [clientEmail],
-      subject: "Agendamento Confirmado - GMP Wellness",
+      subject: "🌿 Agendamento Confirmado - GMP Wellness",
       html: `
-        <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #ff8f73;">Olá, ${clientName}!</h1>
-          <p>Seu momento de relaxamento está confirmado.</p>
-          <hr style="border: 1px solid #eee; margin: 20px 0;" />
-          <p><strong>Serviço:</strong> ${serviceName}</p>
-          <p><strong>Terapeuta:</strong> ${therapistName}</p>
-          <p><strong>Data:</strong> ${date}</p>
-          <p><strong>Horário:</strong> ${time}</p>
-          <p><strong>Nascimento:</strong> ${birthDate || "Não informado"}</p>
-          <hr style="border: 1px solid #eee; margin: 20px 0;" />
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Agendamento Confirmado</title>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #fffcfa; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
           
-          <p style="margin-bottom: 20px;">
-            Imprevistos acontecem. Se precisar cancelar, utilize o botão abaixo:
-          </p>
-          <a href="${cancelLink}" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-            Cancelar Agendamento
-          </a>
+          <div style="background-color: #fffcfa; padding: 40px 20px;">
+            
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f0f0f0;">
+              
+              <div style="background-color: #556b2f; padding: 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">GMP WELLNESS</h1>
+                <p style="color: #e2e8f0; margin: 5px 0 0 0; font-size: 14px;">Seu momento de cuidado</p>
+              </div>
 
-          <p style="font-size: 12px; color: #888; margin-top: 40px;">GMP Wellness Team</p>
-        </div>
+              <div style="padding: 40px 30px;">
+                
+                <h2 style="color: #556b2f; margin-top: 0; text-align: center;">Olá, ${clientName}!</h2>
+                <p style="color: #666666; font-size: 16px; line-height: 1.6; text-align: center;">
+                  Estamos felizes em confirmar seu agendamento. Tudo está pronto para recebê-lo(a) em nosso espaço.
+                </p>
+
+                <div style="background-color: #f8fafc; border-radius: 12px; padding: 25px; margin: 30px 0; border: 1px solid #e2e8f0;">
+                  
+                  <div style="margin-bottom: 15px; border-bottom: 1px solid #eef2ff; padding-bottom: 15px;">
+                    <p style="margin: 0; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Serviço</p>
+                    <p style="margin: 5px 0 0 0; color: #333; font-size: 18px; font-weight: 600;">${serviceName}</p>
+                  </div>
+
+                  <div style="margin-bottom: 15px; border-bottom: 1px solid #eef2ff; padding-bottom: 15px;">
+                    <p style="margin: 0; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Profissional</p>
+                    <p style="margin: 5px 0 0 0; color: #333; font-size: 16px;">${therapistName}</p>
+                  </div>
+
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td width="50%" style="padding-right: 10px;">
+                        <p style="margin: 0; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Data</p>
+                        <p style="margin: 5px 0 0 0; color: #333; font-size: 16px; font-weight: 600;">${date}</p>
+                      </td>
+                      <td width="50%" style="padding-left: 10px;">
+                         <p style="margin: 0; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Horário</p>
+                        <p style="margin: 5px 0 0 0; color: #333; font-size: 16px; font-weight: 600;">${time}</p>
+                      </td>
+                    </tr>
+                  </table>
+
+                </div>
+
+                <div style="text-align: center; margin-top: 40px;">
+                  <p style="font-size: 14px; color: #888; margin-bottom: 15px;">Imprevistos acontecem. Se precisar reagendar ou cancelar:</p>
+                  <a href="${cancelLink}" style="background-color: #fff; color: #ef4444; border: 2px solid #ef4444; padding: 12px 30px; text-decoration: none; border-radius: 50px; font-weight: bold; display: inline-block; font-size: 14px;">
+                    Gerenciar Agendamento
+                  </a>
+                </div>
+
+              </div>
+              
+              <div style="background-color: #f1f5f9; padding: 20px; text-align: center;">
+                <p style="font-size: 12px; color: #94a3b8; margin: 0;">
+                  © 2024 GMP Wellness. Todos os direitos reservados.
+                </p>
+              </div>
+
+            </div>
+          </div>
+        </body>
+        </html>
       `,
     });
 
     if (error) {
+      console.error("Erro Resend:", error);
       return NextResponse.json({ error }, { status: 500 });
     }
 
     return NextResponse.json(data);
   } catch (error) {
+    console.error("Erro TryCatch:", error);
     return NextResponse.json(
       { error: "Erro ao enviar email" },
       { status: 500 }
