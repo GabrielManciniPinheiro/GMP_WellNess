@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const preference = new Preference(client);
 
     const expirationDate = new Date();
-    expirationDate.setMinutes(expirationDate.getMinutes() + 30);
+    expirationDate.setMinutes(expirationDate.getMinutes() + 15);
 
     // 3. Cria preferência com notification_url
     const result = await preference.create({
@@ -58,10 +58,12 @@ export async function POST(request: Request) {
         },
         external_reference: appointmentId,
         date_of_expiration: expirationDate.toISOString(),
-
-        // 👇 AQUI ESTÁ A CURA DO PROBLEMA 👇
-        // Forçamos o Mercado Pago a notificar essa URL específica
         notification_url: webhookUrl,
+
+        payment_methods: {
+          excluded_payment_types: [{ id: "ticket" }],
+          installments: 1,
+        },
 
         back_urls: {
           success: `${siteUrl}/payment/success?id=${appointmentId}`,
