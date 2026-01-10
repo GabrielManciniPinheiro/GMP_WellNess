@@ -137,6 +137,27 @@ function BookingContent() {
     }
   };
 
+  // Função auxiliar de envio de e-mail (Frontend Manual - Usado no Reagendamento)
+  const sendConfirmationEmail = async (apptId: string) => {
+    try {
+      await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: apptId,
+          clientName: formData.name,
+          clientEmail: formData.email,
+          date: getDisplayDate(), // Pega a data formatada
+          time: selectedTime,
+          serviceName: summaryData.serviceName,
+          therapistName: summaryData.therapistName,
+        }),
+      });
+    } catch (e) {
+      console.error("Erro ao enviar email manual:", e);
+    }
+  };
+
   const createAppointment = async () => {
     if (
       !selectedService ||
@@ -220,7 +241,8 @@ function BookingContent() {
           .update({ status: "cancelled" })
           .eq("id", rescheduleId);
 
-        // Removido o envio manual de e-mail aqui para evitar duplicidade ou uso de rota antiga
+        // ✅ GARANTIA DE E-MAIL NO REAGENDAMENTO
+        await sendConfirmationEmail(newAppointment.id);
 
         toast.success(
           "Reagendamento realizado! O horário anterior foi liberado."
