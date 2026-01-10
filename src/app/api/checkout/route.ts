@@ -3,13 +3,13 @@ import { MercadoPagoConfig, Preference } from "mercadopago";
 import { supabase } from "@/lib/supabaseClient";
 
 export async function POST(request: Request) {
-  console.log("🧪 INICIANDO CHECKOUT (TESTE -> VERCEL) 🧪");
+  console.log("💳 CHECKOUT BLINDADO INICIADO 💳");
 
   try {
     const body = await request.json();
     const { appointmentId, title, price, email } = body;
 
-    // 1. Atualiza banco
+    // 1. Atualiza status no banco
     const { error: dbError } = await supabase
       .from("appointments")
       .update({ status: "awaiting_payment" })
@@ -17,28 +17,31 @@ export async function POST(request: Request) {
 
     if (dbError) throw dbError;
 
-    // 2. Valida Token
     if (!process.env.MP_ACCESS_TOKEN) {
-      return NextResponse.json(
-        { error: "Token não configurado" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Token ausente" }, { status: 500 });
     }
 
     const client = new MercadoPagoConfig({
       accessToken: process.env.MP_ACCESS_TOKEN,
     });
 
+    // 2. Define a URL da Vercel (Onde o robô mora)
+    // Se estiver local, ainda usamos a da Vercel para o Webhook funcionar!
+    // O Webhook precisa ser público (https), localhost não funciona pro MP avisar.
+    const siteUrl =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:3000" // Para onde o usuário volta (Front)
+        : "https://wellness.gmpsaas.com";
+
+    // URL DO ROBÔ (Sempre a de produção)
+    const webhookUrl = "https://wellness.gmpsaas.com/api/webhook/payment";
+
     const preference = new Preference(client);
 
-    // 3. Validade de 30 min
     const expirationDate = new Date();
-    expirationDate.setMinutes(expirationDate.getMinutes() + 15);
+    expirationDate.setMinutes(expirationDate.getMinutes() + 30);
 
-    // 4. URL Fixa de Produção (conforme solicitado)
-    const baseUrl = "https://wellness.gmpsaas.com";
-
-    // 5. Cria a preferência
+    // 3. Cria preferência com notification_url
     const result = await preference.create({
       body: {
         items: [
@@ -51,26 +54,29 @@ export async function POST(request: Request) {
           },
         ],
         payer: {
-          email: email, // Usa estritamente o que veio do front
+          email: email,
         },
         external_reference: appointmentId,
         date_of_expiration: expirationDate.toISOString(),
 
+        // 👇 AQUI ESTÁ A CURA DO PROBLEMA 👇
+        // Forçamos o Mercado Pago a notificar essa URL específica
+        notification_url: webhookUrl,
+
         back_urls: {
-          success: `${baseUrl}/payment/success?id=${appointmentId}`,
-          failure: `${baseUrl}/payment/failure?id=${appointmentId}`,
-          pending: `${baseUrl}/payment/pending?id=${appointmentId}`,
+          success: `${siteUrl}/payment/success?id=${appointmentId}`,
+          failure: `${siteUrl}/payment/failure?id=${appointmentId}`,
+          pending: `${siteUrl}/payment/pending?id=${appointmentId}`,
         },
         auto_return: "approved",
       },
     });
 
-    console.log("✅ Link Gerado:", result.init_point);
     return NextResponse.json({ url: result.init_point });
   } catch (error: any) {
-    console.error("❌ ERRO NO CHECKOUT:", error);
+    console.error("❌ ERRO:", error);
     return NextResponse.json(
-      { error: "Erro ao criar pagamento", details: error.message },
+      { error: "Erro no checkout", details: error.message },
       { status: 500 }
     );
   }
