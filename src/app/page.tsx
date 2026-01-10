@@ -172,8 +172,7 @@ function BookingContent() {
           return;
         }
 
-        // 🛡️ TRAVA 2 (AQUI ESTÁ A CORREÇÃO):
-        // Só pode reagendar se o original estiver PAGO/CONFIRMADO
+        // 🛡️ TRAVA 2: Só pode reagendar se o original estiver PAGO/CONFIRMADO
         if (oldAppt.status !== "scheduled" && oldAppt.status !== "confirmed") {
           toast.error(
             "Este agendamento não é válido para reagendamento (Não pago ou cancelado)."
@@ -221,8 +220,7 @@ function BookingContent() {
           .update({ status: "cancelled" })
           .eq("id", rescheduleId);
 
-        // Envia e-mail de confirmação do novo
-        await sendConfirmationEmail(newAppointment.id);
+        // Removido o envio manual de e-mail aqui para evitar duplicidade ou uso de rota antiga
 
         toast.success(
           "Reagendamento realizado! O horário anterior foi liberado."
@@ -259,28 +257,6 @@ function BookingContent() {
       toast.error("Não foi possível agendar. Tente novamente.");
     } finally {
       setIsBooking(false);
-    }
-  };
-
-  // Função auxiliar de envio de e-mail
-  const sendConfirmationEmail = async (apptId: string) => {
-    try {
-      await fetch("/api/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: apptId,
-          clientName: formData.name,
-          clientEmail: formData.email,
-          date: getDisplayDate(),
-          time: selectedTime,
-          birthDate: formData.birthDate,
-          serviceName: summaryData.serviceName,
-          therapistName: summaryData.therapistName,
-        }),
-      });
-    } catch (e) {
-      console.error(e);
     }
   };
 

@@ -84,7 +84,7 @@ export async function POST(request: Request) {
                   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f0f0f0;">
                     
                     <div style="background-color: #556b2f; padding: 30px; text-align: center;">
-                      <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">GMP WELLNESS</h1>
+                      <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">Anaya Terapia Corporal</h1>
                       <p style="color: #e2e8f0; margin: 5px 0 0 0; font-size: 14px;">Seu momento de cuidado</p>
                     </div>
 
