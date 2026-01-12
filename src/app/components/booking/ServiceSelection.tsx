@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Loader2, Gift } from "lucide-react";
+import { Check, Loader2, Gift, TriangleAlert } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 
 // Interface alinhada com as colunas do Banco de Dados
@@ -95,6 +95,24 @@ export function ServiceSelection({
             <span className="text-xs opacity-80">
               Válido para uma sessão. O desconto é aplicado no pagamento
               presencial mediante apresentação de documento.
+            </span>
+          </p>
+        </div>
+      </div>
+
+      {/*  CARD DE AVISO SOBRE O SINAL */}
+      <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex items-start gap-4 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-primary text-white p-2 rounded-full shrink-0 mt-1">
+          <TriangleAlert className="w-5 h-5" />
+        </div>
+        <div>
+          <h4 className="font-semibold text-primary mb-1">Atenção!</h4>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Um sinal de <span className="font-bold text-primary">$35</span> será
+            cobrado para garantir seu horário!
+            <br />
+            <span className="text-xs opacity-80">
+              Fique Tranquilo. Este valor será deduzido do pagamento final!
             </span>
           </p>
         </div>
