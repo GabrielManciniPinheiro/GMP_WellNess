@@ -65,10 +65,32 @@ export function DateTimeSelection({
       // 1. Gera slots base do dia
       let slots = generateTimeSlots(isSaturday);
 
-      // 2. Remove Almoço (12:00 as 13:30)
+      // 2. Remove Almoço Padrão (Mantendo sua regra original: 12:00, 12:30, 13:30)
       slots = slots.filter((time) => {
         return time !== "12:00" && time !== "12:30" && time !== "13:30";
       });
+
+      // ============================================================
+      // 🚫 REGRAS DE NEGÓCIO DA DIRLENE (Bloqueios Específicos)
+      // ============================================================
+
+      // REGRA TERÇA-FEIRA (Dia 2): Bloqueia 10h até 14h
+      if (dayOfWeek === 2) {
+        slots = slots.filter((time) => {
+          // Mantém se for antes das 10:00 OU a partir das 14:00
+          return time < "10:00" || time >= "14:00";
+        });
+      }
+
+      // REGRA QUARTA-FEIRA (Dia 3): Bloqueia 15h até 17h
+      if (dayOfWeek === 3) {
+        slots = slots.filter((time) => {
+          // Mantém se for antes das 15:00 OU a partir das 17:00
+          return time < "15:00" || time >= "17:00";
+        });
+      }
+
+      // ============================================================
 
       // Salva os slots "estruturais" do dia para cálculos futuros
       setAllDaySlots(slots);
@@ -191,7 +213,14 @@ export function DateTimeSelection({
     today.setHours(0, 0, 0, 0);
     const maxDate = new Date();
     maxDate.setDate(today.getDate() + 30);
-    return date < today || date > maxDate || date.getDay() === 0;
+
+    // 🚫 REGRA GERAL: Bloqueia Domingo (0) e Segunda-feira (1)
+    return (
+      date < today ||
+      date > maxDate ||
+      date.getDay() === 0 ||
+      date.getDay() === 1
+    );
   };
 
   return (
